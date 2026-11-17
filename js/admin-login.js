@@ -23,7 +23,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       showToast('Admin access verified', 'success');
       setTimeout(() => {
         // Redirect to /admin; server will gate this route and allow because of the session cookie
-        location.href = 'admin';
+        location.href = '/admin';
       }, 700);
     } catch (err) {
       showToast(err.message || 'Admin login failed', 'error');

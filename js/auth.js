@@ -23,8 +23,8 @@ document.addEventListener('DOMContentLoaded', ()=>{
         if(referralCode) payload.referralCode = referralCode;
         const res = await api.register(payload);
         if(res && res.user) saveUser(res.user);
-        localStorage.setItem('ff_show_community', '1');
-        showToast('🎉 Congratulations! You have received a ₦500 Welcome Bonus.', 'success');
+        localStorage.setItem('monetrix_show_community', '1');
+        showToast('Your account is ready. Welcome to MONETRIX INVEST.', 'success');
         setTimeout(()=> location.href = 'dashboard.html', 800);
       }catch(err){
         console.error(err);
@@ -44,7 +44,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
       try{
         const res = await api.login({ phone, password });
         if(res && res.user) saveUser(res.user);
-        localStorage.setItem('ff_show_community', '1');
+        localStorage.setItem('monetrix_show_community', '1');
         location.href = 'dashboard.html';
       }catch(err){
         console.error(err);

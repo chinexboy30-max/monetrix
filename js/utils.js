@@ -1,129 +1,67 @@
-// Utility helpers and minimal API wrapper
-const USE_API = true; // using backend by default
-const API_BASE = '/api'; // configure to your backend base path
+// Shared client helpers. The browser is always backed by the Express API.
+const API_BASE = '/api';
 
-function getUser(){ try{return JSON.parse(localStorage.getItem('ff_user')) || null}catch(e){return null} }
-function saveUser(u){ localStorage.setItem('ff_user', JSON.stringify(u||{})); }
-function requireAuth(redirectTo='login.html'){ const u = getUser(); if(!u) location.href = redirectTo; return u; }
-function formatN(amount){ if(amount==null) amount=0; return Number(amount).toLocaleString(); }
+function getUser(){
+  try { return JSON.parse(localStorage.getItem('monetrix_user')) || null; }
+  catch { return null; }
+}
+
+function saveUser(user){
+  if(user) localStorage.setItem('monetrix_user', JSON.stringify(user));
+  else localStorage.removeItem('monetrix_user');
+}
+
+function requireAuth(redirectTo = 'login.html'){
+  const user = getUser();
+  if(!user) location.href = redirectTo;
+  return user;
+}
+
+function formatN(amount){
+  const value = Number(amount);
+  return Number.isFinite(value) ? value.toLocaleString('en-NG') : '0';
+}
+
+function escapeHtml(value){
+  return String(value ?? '').replace(/[&<>"']/g, (character) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[character]));
+}
 
 async function apiFetch(url, options = {}){
-  const opts = { credentials: 'include', headers: { 'Content-Type': 'application/json' }, ...options };
+  const opts = {
+    credentials: 'include',
+    ...options,
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      ...(options.headers || {})
+    }
+  };
   if(opts.body && typeof opts.body !== 'string') opts.body = JSON.stringify(opts.body);
-  const res = await fetch(url, opts);
-  const data = await res.json().catch(()=>({}));
-  if(!res.ok){ throw new Error(data.message || 'Request failed'); }
+
+  const response = await fetch(url, opts);
+  const data = await response.json().catch(() => ({}));
+  if(!response.ok){
+    throw new Error(data.message || 'Request failed');
+  }
   return data;
 }
 
-// Minimal API wrapper that falls back to localStorage for demo mode
 const api = {
-  register: async ({ fullName, phone, password, referralCode } = {}) => {
-    if(USE_API){
-      const body = { fullName, phone, password };
-      if(referralCode) body.referralCode = referralCode;
-      return apiFetch(`${API_BASE}/auth/register`, { method:'POST', body });
-    }
-    const user = { fullName, phone, password, balance:500, welcomeBonus:500, earnings:0, referrals:0, refEarnings:0, activePlan:null };
-    saveUser(user);
-    return { user };
-  },
-
-
-  login: async ({ phone, password }) => {
-    if(USE_API){
-      return apiFetch(`${API_BASE}/auth/login`, { method:'POST', body: { phone, password } });
-    }
-    const u = getUser();
-    if(!u || u.phone !== phone || u.password !== password) throw new Error('Invalid credentials');
-    return { user: u };
-  },
-
-  logout: async () => {
-    if(USE_API){
-      return apiFetch(`${API_BASE}/auth/logout`, { method:'POST' });
-    }
-    localStorage.removeItem('ff_user');
-    return { message: 'Logged out' };
-  },
-
-  getMe: async () => {
-    if(USE_API){
-      return apiFetch(`${API_BASE}/users/me`, { method:'GET' });
-    }
-    return { user: getUser() };
-  },
-
-  getTransactions: async () => {
-    if(USE_API){
-      return apiFetch(`${API_BASE}/transactions`, { method:'GET' });
-    }
-    return { transactions: [] };
-  },
-
-  getAnnouncements: async () => {
-    if(USE_API){
-      return apiFetch(`${API_BASE}/announcements`, { method:'GET' });
-    }
-    return { announcements: [] };
-  },
-
-  getNotifications: async () => {
-    if(USE_API){
-      return apiFetch(`${API_BASE}/notifications`, { method:'GET' });
-    }
-    return { notifications: [] };
-  },
-
-  getDepositAccount: async (opts = {}) => {
-    // opts: { amount }
-    if(USE_API){
-      const qs = opts.amount ? `?amount=${encodeURIComponent(opts.amount)}` : '';
-      return apiFetch(`${API_BASE}/deposit-account${qs}`, { method:'GET' });
-    }
-    return { account: { bankName: 'Access Bank', accountNumber: '1909738594', accountName: 'Chinedu Chima', status: 'active' } };
-  },
-
-
-  deposit: async ({ amount, transactionReference, screenshot }) => {
-    if(USE_API){
-      return apiFetch(`${API_BASE}/deposits`, { method:'POST', body: { amount, transactionReference, screenshot } });
-    }
-    const u = getUser() || {};
-    u.balance = (u.balance||0) + Number(amount);
-    saveUser(u);
-    return { user: u };
-  },
-
-  verifyAccount: async ({ bankName, accountNumber }) => {
-    if(USE_API) return apiFetch(`${API_BASE}/verify-account`, { method: 'POST', body: { bankName, accountNumber } });
-    // local mock
-    return { success: true, verificationId: 'ver-' + Date.now(), accountName: 'Local Mock ' + accountNumber.slice(-4) };
-  },
-
-  buyVip: async ({ planId }) => {
-    if(USE_API){
-      return apiFetch(`${API_BASE}/vips/buy`, { method:'POST', body: { planId } });
-    }
-    const u = getUser();
-    if(!u) throw new Error('Not authenticated');
-    saveUser(u);
-    return { user: u };
-  },
-
-  withdraw: async ({ amount, bankName, accountNumber, verificationId }) => {
-    if(USE_API){
-      return apiFetch(`${API_BASE}/withdrawals`, { method:'POST', body: { amount, bankName, accountNumber, verificationId } });
-    }
-    const u = getUser();
-    if(!u) throw new Error('Not authenticated');
-    const req = { id: 'wd-' + Date.now(), amount, bankName, accountNumber, status: 'pending', createdAt: Date.now() };
-    const all = JSON.parse(localStorage.getItem('ff_withdrawals') || '[]');
-    all.push(req);
-    localStorage.setItem('ff_withdrawals', JSON.stringify(all));
-    // do not deduct locally for demo fallback here (server handles balances in production)
-    return { request: req, user: u };
-  }
+  register: (payload) => apiFetch(`${API_BASE}/auth/register`, { method: 'POST', body: payload }),
+  login: (payload) => apiFetch(`${API_BASE}/auth/login`, { method: 'POST', body: payload }),
+  logout: () => apiFetch(`${API_BASE}/auth/logout`, { method: 'POST' }),
+  getMe: () => apiFetch(`${API_BASE}/users/me`),
+  getTransactions: () => apiFetch(`${API_BASE}/transactions`),
+  getAnnouncements: () => apiFetch(`${API_BASE}/announcements`),
+  getNotifications: () => apiFetch(`${API_BASE}/notifications`),
+  initializePaystackPayment: (payload) => apiFetch(`${API_BASE}/paystack/initialize`, { method: 'POST', body: payload }),
+  verifyPaystackPayment: (payload) => apiFetch(`${API_BASE}/paystack/verify`, { method: 'POST', body: payload }),
+  deposit: (payload) => apiFetch(`${API_BASE}/deposits`, { method: 'POST', body: payload }),
+  verifyAccount: (payload) => apiFetch(`${API_BASE}/verify-account`, { method: 'POST', body: payload }),
+  buyVip: (payload) => apiFetch(`${API_BASE}/vips/buy`, { method: 'POST', body: payload }),
+  withdraw: (payload) => apiFetch(`${API_BASE}/withdrawals`, { method: 'POST', body: payload })
 };
 
 window.api = api;

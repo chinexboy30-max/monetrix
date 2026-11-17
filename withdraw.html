@@ -3,8 +3,11 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>FundFlow — Withdraw</title>
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <meta name="theme-color" content="#050B25" />
+  <meta name="description" content="Request a withdrawal from your MONETRIX INVEST account." />
+  <link rel="icon" href="assets/logo/logo.jpeg" />
+  <title>MONETRIX INVEST — Withdraw</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/dashboard.css">
 </head>
 <body>
@@ -14,7 +17,7 @@
       <div class="withdraw-header">
         <div>
           <h2>Withdraw</h2>
-          <p class="muted">Request your withdrawal in a clean bank-transfer workflow. Everything is reviewed by admin before payout is processed.</p>
+          <p class="muted">Submit your verified bank details between 9:00 AM and 9:00 PM Africa/Lagos time. An administrator reviews each request and pays approved withdrawals manually by bank transfer.</p>
         </div>
         <div class="withdraw-balance card balance-card">
           <div class="muted">Available Balance</div>
@@ -25,9 +28,9 @@
       <div id="withdraw-status" class="note-panel card" style="display:none;">
         <h3>Withdrawal requirements</h3>
         <ul>
-          <li>You must have an active VIP plan before you can withdraw funds.</li>
-          <li>Withdrawals are allowed only between 9:00 AM and 9:00 PM.</li>
-          <li>All requests require admin approval before payment.</li>
+          <li>You must have an active investment plan before you can withdraw funds.</li>
+          <li>Withdrawals are allowed every day from 9:00 AM to 9:00 PM Africa/Lagos time.</li>
+          <li>Approved withdrawals are paid manually by an administrator; no automatic payout is made.</li>
         </ul>
       </div>
 
@@ -35,7 +38,8 @@
         <div class="form-grid">
           <div class="form-field">
             <label>Withdrawal Amount (₦)</label>
-            <input type="number" id="withdraw-amount" min="100" required>
+            <input type="number" id="withdraw-amount" min="1000" step="1" required>
+            <div class="field-help">Minimum withdrawal amount: ₦1,000</div>
           </div>
           <div class="form-field">
             <label>Bank Name</label>

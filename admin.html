@@ -3,8 +3,11 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>FundFlow — Admin</title>
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <meta name="theme-color" content="#050B25" />
+  <meta name="description" content="MONETRIX INVEST operations control room." />
+  <link rel="icon" href="assets/logo/logo.jpeg" />
+  <title>MONETRIX INVEST — Operations</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/dashboard.css">
 </head>
 <body>
@@ -13,8 +16,9 @@
     <section class="card withdraw-card">
       <div class="withdraw-header">
         <div>
-          <h2>FundFlow Admin Control Room</h2>
-          <p class="muted">Approve or reject submitted deposits and withdrawals, review account activity, and manage account assignment from one safe dashboard.</p>
+          <span class="eyebrow">MONETRIX TECHNOLOGIES · OPERATIONS</span>
+          <h1>Operations control room</h1>
+          <p class="muted">Review deposits, withdrawals, account activity, and announcements from one server-backed workspace.</p>
         </div>
         <div class="balance-card card">
           <div class="muted">Admin token</div>
@@ -51,7 +55,7 @@
           <div class="section-heading">
             <div>
               <h2>Pending withdrawals</h2>
-              <p class="muted">Approve or reject withdrawal requests.</p>
+              <p class="muted">Review requests and pay users manually by bank transfer.</p>
             </div>
           </div>
           <div id="withdrawals-list" class="admin-list"></div>
@@ -70,28 +74,8 @@
         <section class="card deposit-card">
           <div class="section-heading">
             <div>
-              <h2>Account assignment</h2>
-              <p class="muted">Manage the two deposit accounts.</p>
-            </div>
-          </div>
-          <div id="deposit-accounts-list" class="admin-list"></div>
-        </section>
-
-        <section class="card deposit-card">
-          <div class="section-heading">
-            <div>
-              <h2>Virtual deposit sessions</h2>
-              <p class="muted">Recent virtual deposit sessions and backing accounts for reconciliation.</p>
-            </div>
-          </div>
-          <div id="virtual-accounts-list" class="admin-list"></div>
-        </section>
-
-        <section class="card deposit-card">
-          <div class="section-heading">
-            <div>
               <h2>Announcements</h2>
-              <p class="muted">Publish promotions, VIP updates, and admin announcements.</p>
+              <p class="muted">Publish promotions, investment plan updates, and admin announcements.</p>
             </div>
           </div>
           <div id="announcements-list" class="admin-list"></div>

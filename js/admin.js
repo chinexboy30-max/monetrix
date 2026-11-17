@@ -11,7 +11,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   const withdrawalsList = document.getElementById('withdrawals-list');
   const usersList = document.getElementById('users-list');
   const transactionsList = document.getElementById('transactions-list');
-  const depositAccountsList = document.getElementById('deposit-accounts-list');
   const announcementsList = document.getElementById('announcements-list');
   const createAnnouncementBtn = document.getElementById('create-announcement');
 
@@ -39,28 +38,58 @@ document.addEventListener('DOMContentLoaded', async () => {
     `;
   }
 
+  function formatDateTime(timestamp) {
+    if(!timestamp) return '—';
+    return new Date(timestamp).toLocaleString('en-NG', { dateStyle: 'medium', timeStyle: 'short' });
+  }
+
+  function formatAge(timestamp) {
+    if(!timestamp) return 'time unavailable';
+    const minutes = Math.max(0, Math.floor((Date.now() - Number(timestamp)) / 60000));
+    if(minutes < 1) return 'just now';
+    if(minutes < 60) return `${minutes} min${minutes === 1 ? '' : 's'} ago`;
+    const hours = Math.floor(minutes / 60);
+    return `${hours} hr${hours === 1 ? '' : 's'} ago`;
+  }
+
   function renderDeposits(items) {
     const list = items || [];
     if(!list.length){
       depositsList.innerHTML = '<div class="muted">No pending deposit requests found.</div>';
       return;
     }
-    depositsList.innerHTML = list.map((item) => `
+    depositsList.innerHTML = list.map((item) => {
+      const canDecide = item.status === 'pending' && item.provider === 'paystack' && item.paystackStatus === 'success';
+      const reviewMessage = item.provider !== 'paystack'
+        ? 'Direct bank-transfer deposits are disabled and cannot be credited.'
+        : item.status === 'needs_review'
+        ? 'Held for payment review. Wallet credit is disabled.'
+        : 'Awaiting Paystack confirmation. Wallet credit is disabled.';
+      return `
       <article class="note-panel card" style="margin:12px 0;">
-        <div><strong>${item.id}</strong></div>
-        <div class="muted">User ID: ${item.userId}</div>
+        <div><strong>${escapeHtml(item.id)}</strong></div>
+        <div class="muted">User ID: ${escapeHtml(item.userId)}</div>
+        <div class="muted">User phone: ${escapeHtml(item.userPhone || '—')}</div>
         <div class="muted">Amount: ₦${formatN(item.amount)}</div>
-        <div class="muted">FundFlow Ref: ${item.transactionReference || '—'}</div>
-        <div class="muted">Payment Ref: ${item.paymentReference || '—'}</div>
-        <div class="muted">Bank Transfer Ref: ${item.bankTransferReference || '—'}</div>
-        <div class="muted">Backing Account: ${item.backingAccountId || (item.meta && item.meta.backingAccountId) || '—'}</div>
-        <div class="muted">Status: ${item.status || 'pending'}</div>
-        <div class="button-row">
+        <div class="muted">Provider: ${escapeHtml(item.provider || 'Bank transfer')}</div>
+        <div class="muted">MONETRIX Ref: ${escapeHtml(item.transactionReference || '—')}</div>
+        ${item.paystackReference ? `<div class="muted">Paystack Ref: ${escapeHtml(item.paystackReference)}</div>` : ''}
+        ${item.paystackStatus ? `<div class="muted">Paystack status: ${escapeHtml(item.paystackStatus)}</div>` : ''}
+        ${item.paystackActualAmountKobo !== null && item.paystackActualAmountKobo !== undefined ? `<div class="muted">Paystack amount: ₦${formatN(Number(item.paystackActualAmountKobo) / 100)} ${escapeHtml(item.paystackActualCurrency || '')}</div>` : ''}
+        ${item.paymentVerifiedAt ? `<div class="muted">Payment verified: ${escapeHtml(formatDateTime(item.paymentVerifiedAt))}</div>` : ''}
+        <div class="muted">Payment Ref: ${escapeHtml(item.paymentReference || '—')}</div>
+        <div class="muted">Bank Transfer Ref: ${escapeHtml(item.bankTransferReference || '—')}</div>
+        <div class="muted">Backing Account: ${escapeHtml(item.backingAccountId || (item.meta && item.meta.backingAccountId) || '—')}</div>
+        <div class="admin-request-time"><span>Requested ${escapeHtml(formatDateTime(item.submittedAt || item.createdAt))}</span><strong>${escapeHtml(formatAge(item.submittedAt || item.createdAt))}</strong></div>
+        ${item.paymentSessionExpiresAt ? `<div class="muted">Payment session expires: ${escapeHtml(formatDateTime(item.paymentSessionExpiresAt))}</div>` : ''}
+        <div class="muted">Status: ${escapeHtml(item.status || 'pending')}</div>
+        ${canDecide ? `<div class="button-row">
           <button class="btn primary" data-action="approve-deposit" data-id="${item.id}">Approve</button>
           <button class="btn ghost" data-action="reject-deposit" data-id="${item.id}">Reject</button>
-        </div>
+        </div>` : `<div class="muted">${reviewMessage}</div>`}
       </article>
-    `).join('');
+    `;
+    }).join('');
   }
 
   function renderWithdrawals(items) {
@@ -71,16 +100,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     withdrawalsList.innerHTML = list.map((item) => `
       <article class="note-panel card" style="margin:12px 0;">
-        <div><strong>${item.id}</strong></div>
-        <div class="muted">User ID: ${item.userId}</div>
+        <div><strong>${escapeHtml(item.id)}</strong></div>
+        <div class="muted">User ID: ${escapeHtml(item.userId)}</div>
+        <div class="muted">User phone: ${escapeHtml(item.userPhone || '—')}</div>
         <div class="muted">Amount: ₦${formatN(item.amount)}</div>
-        <div class="muted">Bank: ${item.bankName}</div>
-        <div class="muted">Account: ${item.accountNumber}</div>
-        <div class="muted">Status: ${item.status || 'pending'}</div>
-        <div class="button-row">
-          <button class="btn primary" data-action="approve-withdrawal" data-id="${item.id}">Approve</button>
+        <div class="muted">Bank: ${escapeHtml(item.bankName || '—')}${item.bankCode ? ` (${escapeHtml(item.bankCode)})` : ''}</div>
+        <div class="muted">Account number: ${escapeHtml(item.accountNumber || '—')}</div>
+        <div class="muted">Account name: ${escapeHtml(item.accountName || '—')}</div>
+        <div class="muted">Manual payout: Send the bank transfer outside Monetrix, then mark this request paid.</div>
+        <div class="admin-request-time"><span>Requested ${escapeHtml(formatDateTime(item.createdAt))}</span><strong>${escapeHtml(formatAge(item.createdAt))}</strong></div>
+        <div class="muted">Status: ${escapeHtml(item.status || 'pending')}</div>
+        ${item.status === 'pending' ? `<div class="button-row">
+          <button class="btn primary" data-action="mark-withdrawal-paid" data-id="${item.id}">Mark paid</button>
           <button class="btn ghost" data-action="reject-withdrawal" data-id="${item.id}">Reject</button>
-        </div>
+        </div>` : ''}
       </article>
     `).join('');
   }
@@ -93,10 +126,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     usersList.innerHTML = list.map((user) => `
       <article class="note-panel card" style="margin:12px 0;">
-        <div><strong>${user.fullName || 'User'}</strong></div>
-        <div class="muted">Phone: ${user.phone || '—'}</div>
+        <div><strong>${escapeHtml(user.fullName || 'User')}</strong></div>
+        <div class="muted">Phone: ${escapeHtml(user.phone || '—')}</div>
         <div class="muted">Balance: ₦${formatN(user.balance || 0)}</div>
-        <div class="muted">VIP: ${user.activePlan ? user.activePlan.name : 'No active plan'}</div>
+        <div class="muted">Plan: ${user.activePlan ? user.activePlan.name : 'No active plan'}</div>
       </article>
     `).join('');
   }
@@ -107,7 +140,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       transactionsList.innerHTML = '<div class="muted">No transactions found.</div>';
       return;
     }
-    transactionsList.innerHTML = list.slice(0, 8).map((transaction) => `
+    transactionsList.innerHTML = list.slice().sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).slice(0, 8).map((transaction) => `
       <article class="note-panel card" style="margin:12px 0;">
         <div><strong>${transaction.type || 'transaction'}</strong></div>
         <div class="muted">Amount: ₦${formatN(transaction.amount || 0)}</div>
@@ -115,46 +148,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         <div class="muted">Created: ${new Date(transaction.createdAt || Date.now()).toLocaleString()}</div>
       </article>
     `).join('');
-  }
-
-  function renderDepositAccounts(items) {
-    const list = items || [];
-    if(!list.length){
-      depositAccountsList.innerHTML = '<div class="muted">No deposit account records found.</div>';
-      return;
-    }
-    depositAccountsList.innerHTML = list.map((account) => `
-      <article class="note-panel card" style="margin:12px 0;">
-        <div><strong>${account.bankName}</strong></div>
-        <div class="muted">Account ID: ${account.id}</div>
-        <div class="muted">Account Number: ${account.accountNumber}</div>
-        <div class="muted">Account Name: ${account.accountName}</div>
-        <div class="muted">Status: ${account.status || 'active'}</div>
-        <div class="button-row">
-          <button class="btn ghost" data-account-status="${account.status === 'disabled' ? 'active' : 'disabled'}" data-account-id="${account.id}">${account.status === 'disabled' ? 'Enable' : 'Disable'}</button>
-        </div>
-      </article>
-    `).join('');
-  }
-
-  function renderVirtualAccounts(items) {
-    const list = items || [];
-    if(!list.length){
-      const el = document.getElementById('virtual-accounts-list'); if(el) el.innerHTML = '<div class="muted">No virtual sessions found.</div>';
-      return;
-    }
-    const out = list.slice().reverse().slice(0, 30).map((va) => `
-      <article class="note-panel card" style="margin:12px 0;">
-        <div><strong>${va.id}</strong></div>
-        <div class="muted">User: ${va.userId}</div>
-        <div class="muted">Payment Ref: ${va.paymentReference || '—'}</div>
-        <div class="muted">Backing Account: ${va.backingAccountId || '—'}</div>
-        <div class="muted">Bank: ${va.bankName} — ${va.accountNumber}</div>
-        <div class="muted">Amount: ₦${formatN(va.amount || 0)}</div>
-        <div class="muted">Created: ${new Date(va.createdAt || Date.now()).toLocaleString()}</div>
-      </article>
-    `).join('');
-    const el = document.getElementById('virtual-accounts-list'); if(el) el.innerHTML = out;
   }
 
   function renderAnnouncements(items) {
@@ -165,20 +158,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     announcementsList.innerHTML = list.map((item) => `
       <article class="note-panel card" style="margin:12px 0;">
-        <div><strong>${item.title}</strong></div>
-        <div class="muted">${item.message}</div>
+        <div><strong>${escapeHtml(item.title)}</strong></div>
+        <div class="muted">${escapeHtml(item.message)}</div>
       </article>
     `).join('');
   }
 
   async function loadQueue() {
     try {
-      const [stats, deposits, withdrawals, users, accounts, announcements, transactions] = await Promise.all([
+      const [stats, deposits, withdrawals, users, announcements, transactions] = await Promise.all([
         adminFetch('/api/admin/stats'),
         adminFetch('/api/admin/deposits'),
         adminFetch('/api/admin/withdrawals'),
         adminFetch('/api/admin/users'),
-        adminFetch('/api/admin/deposit-accounts'),
         adminFetch('/api/admin/announcements'),
         adminFetch('/api/admin/transactions')
       ]);
@@ -192,15 +184,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         createStatCard('Total Revenue', `₦${formatN(stats.totalRevenue || 0)}`)
       ].join('');
 
-      renderDeposits((deposits.deposits || []).filter(d => d.status !== 'approved' && d.status !== 'rejected'));
-      renderWithdrawals((withdrawals.withdrawals || []).filter(w => w.status !== 'approved' && w.status !== 'rejected'));
+      renderDeposits((deposits.deposits || []).filter(d => d.status === 'pending' || d.status === 'needs_review'));
+      renderWithdrawals((withdrawals.withdrawals || []).filter(w => w.status === 'pending'));
       renderUsers(users.users || []);
-      renderDepositAccounts(accounts.accounts || []);
-      // Load and render recent virtual sessions for reconciliation
-      try{
-        const virtualRes = await adminFetch('/api/admin/virtual-accounts');
-        renderVirtualAccounts(virtualRes.virtualAccounts || []);
-      }catch(e){ /* ignore */ }
       renderAnnouncements(announcements.announcements || []);
       renderTransactions(transactions.transactions || []);
     } catch (err) {
@@ -209,23 +195,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   document.addEventListener('click', async (e) => {
-    const accountToggle = e.target.closest('button[data-account-id]');
-    if(accountToggle){
-      try {
-        const accountId = accountToggle.dataset.accountId;
-        const status = accountToggle.dataset.accountStatus;
-        await adminFetch('/api/admin/deposit-accounts', {
-          method: 'POST',
-          body: JSON.stringify({ accountId, status })
-        });
-        showToast('Deposit account status updated.', 'success');
-        await loadQueue();
-      } catch (err) {
-        showToast(err.message || 'Unable to update deposit account', 'error');
-      }
-      return;
-    }
-
     const btn = e.target.closest('button[data-action]');
     if(!btn) return;
     const id = btn.dataset.id;
@@ -240,11 +209,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
       }
     }
+    if(action === 'mark-withdrawal-paid' && !window.confirm('Only continue after you have manually sent this bank transfer to the verified account. Mark this withdrawal as paid?')) return;
 
     let endpoint = '';
     if(action === 'approve-deposit') endpoint = `/api/admin/deposits/${id}/approve`;
     if(action === 'reject-deposit') endpoint = `/api/admin/deposits/${id}/reject`;
-    if(action === 'approve-withdrawal') endpoint = `/api/admin/withdrawals/${id}/approve`;
+    if(action === 'mark-withdrawal-paid') endpoint = `/api/admin/withdrawals/${id}/mark-paid`;
     if(action === 'reject-withdrawal') endpoint = `/api/admin/withdrawals/${id}/reject`;
 
     try {
@@ -253,7 +223,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         options.body = JSON.stringify({ reason });
       }
       await adminFetch(endpoint, options);
-      showToast(`${action.replace('-', ' ')} completed.`, 'success');
+      showToast(action === 'mark-withdrawal-paid' ? 'Withdrawal marked paid.' : `${action.replace('-', ' ')} completed.`, 'success');
       await loadQueue();
     } catch (err) {
       showToast(err.message || 'Admin action failed', 'error');
@@ -279,6 +249,27 @@ document.addEventListener('DOMContentLoaded', async () => {
     } catch (err) {
       showToast(err.message || 'Unable to create announcement', 'error');
     }
+  });
+
+  const depositSearchInput = document.getElementById('deposit-search-input');
+  const depositSearchButton = document.getElementById('deposit-search-btn');
+  const depositSearchClear = document.getElementById('deposit-search-clear');
+  depositSearchButton?.addEventListener('click', async () => {
+    const ref = depositSearchInput?.value.trim();
+    if(!ref){
+      showToast('Enter a MONETRIX reference to search.', 'warning');
+      return;
+    }
+    try {
+      const response = await adminFetch(`/api/admin/deposits/search?ref=${encodeURIComponent(ref)}`);
+      renderDeposits((response.deposits || []).filter((deposit) => deposit.status === 'pending' || deposit.status === 'needs_review'));
+    } catch(error) {
+      showToast(error.message || 'Unable to search deposits.', 'error');
+    }
+  });
+  depositSearchClear?.addEventListener('click', () => {
+    if(depositSearchInput) depositSearchInput.value = '';
+    loadQueue();
   });
 
   await loadQueue();

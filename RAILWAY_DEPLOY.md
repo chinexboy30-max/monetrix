@@ -1,47 +1,44 @@
-Railway deployment instructions for FundFlow
+# Railway deployment notes
 
-This repository can be deployed to Railway (https://railway.app) using the steps below.
+The app runs on the existing Node.js/Express backend. Deploy with the repository Dockerfile (or `npm start`) and attach a persistent volume at `/usr/src/app/data` for `data/store.json`. Run one instance only.
 
-Prerequisites
-- A Railway account
-- Git and a GitHub account (or use Railway's GitHub import)
+## Staging with Paystack test keys
+- `NODE_ENV=staging`
+- `PAYMENT_MODE=testing`
+- `APP_TIMEZONE=Africa/Lagos`
+- `PORT` (Railway supplies this)
+- `JWT_SECRET=<private random value, at least 32 characters>`
+- `ADMIN_TOKEN=<private random value, at least 32 characters>`
+- `BASE_URL=https://<your-staging-domain>`
+- `PAYSTACK_PUBLIC_KEY=pk_test_...`
+- `PAYSTACK_SECRET_KEY=sk_test_...`
+- `PAYSTACK_CALLBACK_URL=https://<your-staging-domain>/deposit.html`
+- `PAYSTACK_COLLECTION_APPROVED=false`
+- `PAYSTACK_WEBHOOK_SECRET` (optional; if omitted, the API secret key is used)
 
-1) Create a Git repository and push code
-- Initialize a repo locally and push to GitHub:
-  git init
-  git add .
-  git commit -m "Prepare app for Railway deployment\n\nCo-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"
-  # create a GitHub repo and push (replace origin URL):
-  git remote add origin <your-github-repo-url>
-  git branch -M main
-  git push -u origin main
+Do not commit `.env` or expose `PAYSTACK_SECRET_KEY` in client code. `PAYSTACK_WEBHOOK_SECRET` can remain blank because Paystack signs webhooks with the API secret key.
 
-2) Create a Railway project
-- Go to https://railway.app and create a new project -> Deploy from GitHub
-- Connect your GitHub account, select the repository and branch (main)
-- Railway will detect a Node app or Dockerfile. If using Dockerfile, choose Docker deploy.
+After hosting, register this URL in the Paystack dashboard:
 
-3) Set Environment Variables in Railway
-- In the Railway project, go to Settings -> Variables and add:
-  ADMIN_TOKEN = Chinex$boy1
-  JWT_SECRET = <a strong secret>
-  PAYMENT_MODE = production
-  PAYSTACK_PUBLIC_KEY = <if needed>
-  PAYSTACK_SECRET_KEY = <if needed>
-  PORT = 3000
+`https://<your-staging-domain>/api/paystack/webhook`
 
-Important: Do NOT commit .env to the repo (it is already in .gitignore). Set secrets in Railway only.
+Test keys are rejected when `NODE_ENV=production`. Hosted staging uses `NODE_ENV=staging` and HTTPS cookies. Do not treat test transactions as real funds.
 
-4) Deploy
-- Trigger a deploy in Railway. After successful build, Railway will provide a public URL (https://<project>.railway.app)
-- Visit:
-  - Public user site: https://<project>.railway.app/
-  - Admin login: https://<project>.railway.app/admin/login (use ADMIN_TOKEN)
+## Live collection
+Only after Paystack approves Monetrix's business and collection model, switch to:
+- `NODE_ENV=production`
+- `PAYMENT_MODE=live`
+- `APP_TIMEZONE=Africa/Lagos`
+- Matching live `pk_live_...` and `sk_live_...` keys
+- `JWT_SECRET` and `ADMIN_TOKEN` (private random values, at least 32 characters each)
+- `BASE_URL=https://<your-live-domain>`
+- `PAYSTACK_CALLBACK_URL=https://<your-live-domain>/deposit.html`
+- `PAYSTACK_COLLECTION_APPROVED=true`
 
-Notes about data persistence
-- This app stores data in data/store.json on the filesystem. Railway dynos/filesystem are ephemeral across deployments and restarts.
-- For production, replace file-based storage with a proper DB (Postgres, MongoDB) or use Railway plugins for persistent storage.
+Register `https://<your-live-domain>/api/paystack/webhook` in the Paystack dashboard. Always use HTTPS.
 
-If you'd like, I can:
-- Create a small seed script to create a test admin or user (not committing secrets)
-- Provide a GitHub Actions workflow to build and deploy to Railway via CLI (requires Railway API key)
+The JSON store only supports a single app instance. Ensure the Railway volume is mounted at the app's `data` directory and configure one instance; use a transactional database before scaling horizontally. Payments are verified directly with Paystack and require admin approval before wallet credit.
+
+Deposits use Paystack checkout only, with a ₦100 minimum. Withdrawals are accepted daily from 9:00 AM (inclusive) until 9:00 PM (exclusive), Africa/Lagos time. Administrators must send the bank transfer manually and only then use **Mark paid** in the admin dashboard; Monetrix does not call Paystack transfers.
+
+Run `npm test` and verify `/healthz` before enabling traffic.

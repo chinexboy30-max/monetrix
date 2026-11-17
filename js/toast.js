@@ -1,6 +1,6 @@
 // Lightweight toast utility
 function showToast(message, type = 'info', timeout = 3500){
-  const containerId = 'ff_toast_container';
+  const containerId = 'monetrix_toast_container';
   let container = document.getElementById(containerId);
   if(!container){
     container = document.createElement('div');

@@ -1,4 +1,4 @@
-# Dockerfile for FundFlow
+# Dockerfile for MONETRIX INVEST
 FROM node:18-alpine
 WORKDIR /usr/src/app
 
