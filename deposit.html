@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="theme-color" content="#050B25" />
+  <title>MONETRIX INVEST — Deposit</title>
+  <meta name="description" content="Fund your MONETRIX INVEST account securely." />
+  <link rel="icon" href="assets/logo/logo.jpeg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/dashboard.css">
+</head>
+<body>
+  <div data-include="components/navbar.html"></div>
+  <main class="page container app-shell">
+    <section class="page-intro">
+      <div>
+        <span class="eyebrow">Wallet funding</span>
+        <h1>Deposit funds</h1>
+        <p class="lead">Choose an amount and continue to Paystack’s secure hosted checkout. Your payment is verified by the server before it can be reviewed for wallet credit.</p>
+      </div>
+      <div class="intro-chip"><span class="status-dot"></span> Paystack checkout</div>
+    </section>
+
+    <section class="card deposit-card">
+      <div class="section-heading">
+        <div><span class="eyebrow">Secure payment</span><h2>Choose an amount</h2></div>
+        <span class="status-pill">Minimum ₦100</span>
+      </div>
+      <form id="paystack-deposit-form" class="modern-form">
+        <div class="form-field">
+          <label for="deposit-amount">Deposit amount (₦)</label>
+          <div class="currency-input"><span>₦</span><input type="number" id="deposit-amount" min="100" step="1" placeholder="100" required></div>
+          <div class="field-help">Enter a whole-naira amount. The server independently validates it before creating a payment.</div>
+        </div>
+        <div class="form-field">
+          <label for="deposit-email">Email for your Paystack receipt</label>
+          <input type="email" id="deposit-email" maxlength="254" autocomplete="email" placeholder="you@example.com" required>
+        </div>
+        <button class="btn primary btn-wide" id="start-deposit" type="submit">Continue to secure checkout <span aria-hidden="true">→</span></button>
+      </form>
+      <div id="deposit-payment-status" class="note-panel hidden" role="status" aria-live="polite" style="margin-top:20px;">
+        <p id="deposit-payment-message" class="muted"></p>
+        <div id="deposit-payment-reference" class="muted"></div>
+        <button id="verify-payment-status" class="btn ghost hidden" type="button" style="margin-top:14px;">Check payment status</button>
+      </div>
+    </section>
+  </main>
+  <div data-include="components/footer.html"></div>
+  <script src="js/app.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/toast.js"></script>
+  <script src="js/deposit.js"></script>
+</body>
+</html>
