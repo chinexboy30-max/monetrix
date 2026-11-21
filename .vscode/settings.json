@@ -1,4 +1,5 @@
 {
     "livePreview.defaultPreviewPath": "/dashboard.html",
-    "liveServer.settings.port": 5501
+    "liveServer.settings.port": 5501,
+    "Codegeex.RepoIndex": true
 }

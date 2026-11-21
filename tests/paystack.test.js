@@ -214,6 +214,7 @@ test('Paystack collection is verified, idempotent, and user-owned', async (t) =>
     const depositPage = await request('/deposit.html');
     assert.equal(depositPage.response.status, 200);
     assert.match(depositPage.response.headers.get('content-type'), /text\/html/);
+    assert.match(depositPage.data, /id="deposit-email"[^>]*value="monetrixinvesment9@gmail\.com"/);
     for(const publicAsset of ['/css/dashboard.css', '/js/deposit.js', '/components/navbar.html', '/assets/logo/logo.jpeg']){
       const asset = await request(publicAsset);
       assert.equal(asset.response.status, 200, `${publicAsset} should be available`);
@@ -247,10 +248,16 @@ test('Paystack collection is verified, idempotent, and user-owned', async (t) =>
       });
       assert.equal(invalid.response.status, 400, `amount ${amount} should be rejected`);
     }
+    const invalidEmail = await request('/api/paystack/initialize', {
+      method: 'POST',
+      body: { amount: 5000, email: 'not-an-email' }
+    });
+    assert.equal(invalidEmail.response.status, 400);
 
     const minimum = await initializePayment(1000);
     assert.equal(minimum.payment.amount, 1000);
     assert.equal(initializationRequests.at(-1).amount, 100000);
+    assert.equal(initializationRequests.at(-1).email, 'monetrixinvesment9@gmail.com');
   });
 
   await t.test('initializes hosted checkout and rejects a different user verifying its reference', async () => {
@@ -265,9 +272,10 @@ test('Paystack collection is verified, idempotent, and user-owned', async (t) =>
     const initPayload = initializationRequests.at(-1);
     assert.equal(initPayload.amount, 500000);
     assert.equal(initPayload.currency, 'NGN');
-    assert.equal(initPayload.email, '08000000001@deposits.monetrixinvest.internal');
+    assert.equal(initPayload.email, 'monetrixinvesment9@gmail.com');
     assert.equal(initPayload.callback_url, process.env.PAYSTACK_CALLBACK_URL);
     const pendingDeposit = (await adminDeposits()).find((deposit) => deposit.paystackReference === initialized.reference);
+    assert.equal(pendingDeposit.email, 'monetrixinvesment9@gmail.com');
     const prematureApproval = await request(`/api/admin/deposits/${pendingDeposit.id}/approve`, {
       method: 'POST',
       headers: { 'x-admin-token': adminToken }

@@ -70,6 +70,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         <div><strong>${escapeHtml(item.id)}</strong></div>
         <div class="muted">User ID: ${escapeHtml(item.userId)}</div>
         <div class="muted">User phone: ${escapeHtml(item.userPhone || '—')}</div>
+        ${item.email ? `<div class="muted">Email: ${escapeHtml(item.email)}</div>` : ''}
         <div class="muted">Amount: ₦${formatN(item.amount)}</div>
         <div class="muted">Provider: ${escapeHtml(item.provider || 'Bank transfer')}</div>
         <div class="muted">MONETRIX Ref: ${escapeHtml(item.transactionReference || '—')}</div>

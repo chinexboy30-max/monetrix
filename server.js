@@ -45,6 +45,7 @@ if(process.env.NODE_ENV === 'production' && Buffer.byteLength(ADMIN_TOKEN, 'utf8
 }
 const PAYSTACK_API_BASE = 'https://api.paystack.co';
 const MIN_DEPOSIT_AMOUNT = 1000;
+const PAYSTACK_DEFAULT_EMAIL = 'monetrixinvesment9@gmail.com';
 const ADMIN_MESSAGE_TTL_MS = 24 * 60 * 60 * 1000;
 const LEGACY_ADMIN_NOTIFICATION_TITLES = new Set([
   'Deposit approved',
@@ -799,15 +800,15 @@ app.get('/api/paystack/config', (req, res) => {
 });
 
 app.post('/api/paystack/initialize', authMiddleware, async (req, res) => {
-  const { amount } = req.body || {};
+  const { amount, email } = req.body || {};
   const depositAmount = Number(amount);
   if(!Number.isSafeInteger(depositAmount) || depositAmount < MIN_DEPOSIT_AMOUNT || !Number.isSafeInteger(depositAmount * 100)){
     return res.status(400).json({ message: 'Enter a whole-naira deposit amount of at least ₦1,000.' });
   }
-  // No receipt is emailed to customers, but Paystack requires an email on the
-  // transaction. Derive a stable internal address from the account's phone number
-  // so the checkout never needs to ask for one.
-  const normalizedEmail = `${String(req.user.phone || '').replace(/\D/g, '') || 'guest'}@deposits.monetrixinvest.internal`;
+  const normalizedEmail = String(email || PAYSTACK_DEFAULT_EMAIL).trim();
+  if(normalizedEmail.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)){
+    return res.status(400).json({ message: 'Enter a valid email address for Paystack checkout.' });
+  }
 
   let checkoutSettings;
   try{
@@ -845,6 +846,7 @@ app.post('/api/paystack/initialize', authMiddleware, async (req, res) => {
         id: `dep-${crypto.randomUUID()}`,
         userId: user.id,
         userPhone: user.phone,
+        email: normalizedEmail,
         amount: depositAmount,
         currency: 'NGN',
         provider: 'paystack',
