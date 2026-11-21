@@ -18,6 +18,9 @@ document.addEventListener('DOMContentLoaded', ()=>{
       const password = document.getElementById('password').value;
       const referralCode = (document.getElementById('referralCode') && document.getElementById('referralCode').value.trim()) || undefined;
       if(!fullName||!phone||!password){ stopLoading(); showToast('Please fill all fields', 'warning'); return; }
+      const phoneDigits = phone.replace(/[\s\-()]/g, '');
+      const isValidPhone = /^0\d{10}$/.test(phoneDigits) || /^\+234\d{10}$/.test(phoneDigits);
+      if(!isValidPhone){ stopLoading(); showToast('Enter a valid Nigerian phone number, e.g. 08012345678', 'warning'); return; }
       try{
         const payload = { fullName, phone, password };
         if(referralCode) payload.referralCode = referralCode;

@@ -629,8 +629,15 @@ app.use('/api', limiter);
 app.post('/api/auth/register', (req, res) => {
   const { fullName, phone, password, referralCode } = req.body;
   if(!fullName || !phone || !password) return res.status(400).json({ message: 'Missing required fields' });
+  // Reject fake/invalid phone numbers: must be a valid Nigerian number (11 digits starting 0, or +234 format).
+  const phoneDigits = String(phone).replace(/[\s\-()]/g, '');
+  const normalizedPhone = /^0\d{10}$/.test(phoneDigits) ? phoneDigits
+    : /^\+234\d{10}$/.test(phoneDigits) ? '0' + phoneDigits.slice(4)
+    : null;
+  if(!normalizedPhone) return res.status(400).json({ message: 'Enter a valid Nigerian phone number, e.g. 08012345678' });
+  if(String(password).length < 6) return res.status(400).json({ message: 'Password must be at least 6 characters' });
   const data = readData();
-  if(findUserByPhone(data, phone)) return res.status(409).json({ message: 'Phone number already registered' });
+  if(findUserByPhone(data, normalizedPhone)) return res.status(409).json({ message: 'Phone number already registered' });
   const id = 'user-' + Date.now();
   const referrer = findUserByReferralCode(data, String(referralCode || '').trim());
   const passwordHash = bcrypt.hashSync(password, 10);
@@ -642,7 +649,7 @@ app.post('/api/auth/register', (req, res) => {
   const user = {
     id,
     fullName,
-    phone,
+    phone: normalizedPhone,
     passwordHash,
     balance: 500,
     welcomeBonus: 500,
