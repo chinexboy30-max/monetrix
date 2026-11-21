@@ -19,27 +19,23 @@
       <div>
         <span class="eyebrow">Wallet funding</span>
         <h1>Deposit funds</h1>
-        <p class="lead">Choose an amount and continue to Paystack’s secure hosted checkout. Your payment is verified by the server before it can be reviewed for wallet credit.</p>
+        <p class="lead">Choose an amount and continue to Paystack’s secure checkout.</p>
       </div>
       <div class="intro-chip"><span class="status-dot"></span> Paystack checkout</div>
     </section>
 
     <section class="card deposit-card">
       <div class="section-heading">
-        <div><span class="eyebrow">Secure payment</span><h2>Choose an amount</h2></div>
-        <span class="status-pill">Minimum ₦100</span>
+        <div><span class="eyebrow"><span aria-hidden="true">💳</span> Secure payment</span><h2>Choose an amount</h2></div>
+        <span class="status-pill">Minimum ₦1,000</span>
       </div>
       <form id="paystack-deposit-form" class="modern-form">
         <div class="form-field">
           <label for="deposit-amount">Deposit amount (₦)</label>
-          <div class="currency-input"><span>₦</span><input type="number" id="deposit-amount" min="100" step="1" placeholder="100" required></div>
-          <div class="field-help">Enter a whole-naira amount. The server independently validates it before creating a payment.</div>
+          <div class="currency-input"><span>₦</span><input type="number" id="deposit-amount" min="1000" step="1" placeholder="1000" required></div>
+          <div class="field-help">Minimum deposit: ₦1,000.</div>
         </div>
-        <div class="form-field">
-          <label for="deposit-email">Email for your Paystack receipt</label>
-          <input type="email" id="deposit-email" maxlength="254" autocomplete="email" placeholder="you@example.com" required>
-        </div>
-        <button class="btn primary btn-wide" id="start-deposit" type="submit">Continue to secure checkout <span aria-hidden="true">→</span></button>
+        <button class="btn primary btn-wide" id="start-deposit" type="submit"><span aria-hidden="true">🔒</span> Continue to secure checkout <span aria-hidden="true">→</span></button>
       </form>
       <div id="deposit-payment-status" class="note-panel hidden" role="status" aria-live="polite" style="margin-top:20px;">
         <p id="deposit-payment-message" class="muted"></p>

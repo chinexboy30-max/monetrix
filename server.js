@@ -44,7 +44,7 @@ if(process.env.NODE_ENV === 'production' && Buffer.byteLength(ADMIN_TOKEN, 'utf8
   throw new Error('ADMIN_TOKEN must be configured with at least 32 characters in production.');
 }
 const PAYSTACK_API_BASE = 'https://api.paystack.co';
-const MIN_DEPOSIT_AMOUNT = 100;
+const MIN_DEPOSIT_AMOUNT = 1000;
 const ADMIN_MESSAGE_TTL_MS = 24 * 60 * 60 * 1000;
 const LEGACY_ADMIN_NOTIFICATION_TITLES = new Set([
   'Deposit approved',
@@ -519,8 +519,8 @@ function getWithdrawalAvailability(timestamp = Date.now()){
     timezone: WITHDRAWAL_TIMEZONE,
     nextOpenAt,
     message: available
-      ? 'Withdrawals are currently available on Tuesdays and Thursdays, from 9:00 AM up to 9:00 PM (exclusive) Africa/Lagos time.'
-      : `Withdrawals are closed. They next open ${nextOpeningText} Africa/Lagos time.`
+      ? 'Withdrawals are open now — Tuesdays and Thursdays, 9 AM – 9 PM.'
+      : `Withdrawals are closed. Next opening: ${nextOpeningText}.`
   };
 }
 
@@ -792,15 +792,15 @@ app.get('/api/paystack/config', (req, res) => {
 });
 
 app.post('/api/paystack/initialize', authMiddleware, async (req, res) => {
-  const { amount, email } = req.body || {};
+  const { amount } = req.body || {};
   const depositAmount = Number(amount);
   if(!Number.isSafeInteger(depositAmount) || depositAmount < MIN_DEPOSIT_AMOUNT || !Number.isSafeInteger(depositAmount * 100)){
-    return res.status(400).json({ message: 'Enter a whole-naira deposit amount of at least ₦100.' });
+    return res.status(400).json({ message: 'Enter a whole-naira deposit amount of at least ₦1,000.' });
   }
-  const normalizedEmail = String(email || '').trim().toLowerCase();
-  if(normalizedEmail.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)){
-    return res.status(400).json({ message: 'A valid email address is required to initialize Paystack checkout.' });
-  }
+  // No receipt is emailed to customers, but Paystack requires an email on the
+  // transaction. Derive a stable internal address from the account's phone number
+  // so the checkout never needs to ask for one.
+  const normalizedEmail = `${String(req.user.phone || '').replace(/\D/g, '') || 'guest'}@deposits.monetrixinvest.internal`;
 
   let checkoutSettings;
   try{

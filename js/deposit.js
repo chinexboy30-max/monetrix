@@ -3,7 +3,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   const form = document.getElementById('paystack-deposit-form');
   const amountInput = document.getElementById('deposit-amount');
-  const emailInput = document.getElementById('deposit-email');
   const statusPanel = document.getElementById('deposit-payment-status');
   const statusMessage = document.getElementById('deposit-payment-message');
   const referenceLabel = document.getElementById('deposit-payment-reference');
@@ -26,13 +25,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       const response = await api.verifyPaystackPayment({ reference });
       const status = response.payment && response.payment.status;
       const messages = {
-        success: 'Paystack verified your payment. Your deposit is pending operations approval; your wallet has not been credited yet.',
+        success: 'Payment verified.',
         failed: 'Paystack reports that this payment failed. No wallet credit was made.',
         cancelled: 'This Paystack checkout was cancelled. No wallet credit was made.',
         needs_review: 'The payment details did not match the expected amount or currency. It has been held for review; no wallet credit was made.',
-        pending: 'Paystack has not confirmed this payment yet. You can check again shortly.'
+        pending: 'Payment not confirmed yet. Check again shortly.'
       };
-      showPaymentStatus(messages[status] || 'The payment status is not yet confirmed. You can check again shortly.', reference, status !== 'success');
+      showPaymentStatus(messages[status] || 'Payment status not confirmed yet. Check again shortly.', reference, status !== 'success');
       if(status === 'success') showToast('Payment verified. Awaiting operations approval.', 'success');
       else if(status === 'failed' || status === 'cancelled' || status === 'needs_review') showToast(messages[status], 'warning');
     }catch(error){
@@ -66,22 +65,16 @@ document.addEventListener('DOMContentLoaded', async () => {
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
     const amount = Number(amountInput.value);
-    const email = emailInput.value.trim();
-    if(!Number.isSafeInteger(amount) || amount < 100){
-      showToast('Enter a whole-naira amount of at least ₦100.', 'warning');
+    if(!Number.isSafeInteger(amount) || amount < 1000){
+      showToast('Enter a whole-naira amount of at least ₦1,000.', 'warning');
       amountInput.focus();
-      return;
-    }
-    if(!email || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){
-      showToast('Enter a valid email address for your Paystack receipt.', 'warning');
-      emailInput.focus();
       return;
     }
 
     const button = form.querySelector('button[type="submit"]');
     const stopLoading = setLoading(button, true);
     try{
-      const response = await api.initializePaystackPayment({ amount, email });
+      const response = await api.initializePaystackPayment({ amount });
       const checkoutUrl = new URL(response.authorizationUrl);
       if(checkoutUrl.origin !== 'https://checkout.paystack.com'){
         throw new Error('The checkout address returned by the server is invalid.');

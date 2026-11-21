@@ -106,7 +106,7 @@ async function request(endpoint, { method = 'GET', body, cookie = userCookie, he
 async function initializePayment(amount = 5000){
   const result = await request('/api/paystack/initialize', {
     method: 'POST',
-    body: { amount, email: 'payer@example.test' }
+    body: { amount }
   });
   assert.equal(result.response.status, 200);
   return result.data;
@@ -240,17 +240,17 @@ test('Paystack collection is verified, idempotent, and user-owned', async (t) =>
     });
     assert.equal(unauthorized.response.status, 401);
 
-    for(const amount of [99, 99.5, 0, -5000]){
+    for(const amount of [500, 999, 99.5, 0, -5000]){
       const invalid = await request('/api/paystack/initialize', {
         method: 'POST',
-        body: { amount, email: 'payer@example.test' }
+        body: { amount }
       });
       assert.equal(invalid.response.status, 400, `amount ${amount} should be rejected`);
     }
 
-    const minimum = await initializePayment(100);
-    assert.equal(minimum.payment.amount, 100);
-    assert.equal(initializationRequests.at(-1).amount, 10000);
+    const minimum = await initializePayment(1000);
+    assert.equal(minimum.payment.amount, 1000);
+    assert.equal(initializationRequests.at(-1).amount, 100000);
   });
 
   await t.test('initializes hosted checkout and rejects a different user verifying its reference', async () => {
@@ -265,7 +265,7 @@ test('Paystack collection is verified, idempotent, and user-owned', async (t) =>
     const initPayload = initializationRequests.at(-1);
     assert.equal(initPayload.amount, 500000);
     assert.equal(initPayload.currency, 'NGN');
-    assert.equal(initPayload.email, 'payer@example.test');
+    assert.equal(initPayload.email, '08000000001@deposits.monetrixinvest.internal');
     assert.equal(initPayload.callback_url, process.env.PAYSTACK_CALLBACK_URL);
     const pendingDeposit = (await adminDeposits()).find((deposit) => deposit.paystackReference === initialized.reference);
     const prematureApproval = await request(`/api/admin/deposits/${pendingDeposit.id}/approve`, {

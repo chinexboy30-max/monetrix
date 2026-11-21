@@ -91,7 +91,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
     try{
       const res = await api.withdraw({ amount: amt, bankName: bank, accountNumber: acctNo, verificationId });
       if(res && res.withdrawal){
-        showToast('Withdrawal request submitted. If approved, it will be paid manually to your verified bank account.', 'success');
+        showToast('Withdrawal request submitted.', 'success');
         setTimeout(()=> location.href = 'dashboard.html', 800);
       }else{
         showToast('Withdrawal submission failed', 'error');
