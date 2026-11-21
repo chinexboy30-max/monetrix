@@ -1,5 +1,11 @@
 # Railway deployment notes
 
+## Monetrix service configuration
+- Connect `chinexboy30-max/monetrix` on `main`; use the repository root as the Root Directory. Do not point this service at a `backend` subdirectory.
+- Use the Dockerfile builder and the root `Dockerfile`. Leave Railway's separate build-command override unset: the Dockerfile installs production dependencies with `npm ci --only=production`.
+- Use `node server.js` as the start command (also declared by `npm start` and `railway.json`). The server listens on Railway's injected `PORT`; `/healthz` is the health check.
+- Express serves the HTML pages, CSS, JavaScript, and `/api` routes from the same origin. This is a single Node/Express service, not a separate static frontend plus Django API.
+
 The app runs on the existing Node.js/Express backend. Deploy with the repository Dockerfile (or `npm start`) and attach a persistent volume at `/usr/src/app/data` for `data/store.json`. Run one instance only.
 
 ## Staging with Paystack test keys
