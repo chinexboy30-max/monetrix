@@ -214,7 +214,7 @@ test('Paystack collection is verified, idempotent, and user-owned', async (t) =>
     const depositPage = await request('/deposit.html');
     assert.equal(depositPage.response.status, 200);
     assert.match(depositPage.response.headers.get('content-type'), /text\/html/);
-    assert.match(depositPage.data, /id="deposit-email"[^>]*value="monetrixinvesment9@gmail\.com"/);
+    assert.match(depositPage.data, /id="deposit-email"[^>]*value="monetrixinvesment9@gmail\.com"[^>]*readonly/);
     for(const publicAsset of ['/css/dashboard.css', '/js/deposit.js', '/components/navbar.html', '/assets/logo/logo.jpeg']){
       const asset = await request(publicAsset);
       assert.equal(asset.response.status, 200, `${publicAsset} should be available`);
@@ -248,11 +248,12 @@ test('Paystack collection is verified, idempotent, and user-owned', async (t) =>
       });
       assert.equal(invalid.response.status, 400, `amount ${amount} should be rejected`);
     }
-    const invalidEmail = await request('/api/paystack/initialize', {
+    const emailOverride = await request('/api/paystack/initialize', {
       method: 'POST',
-      body: { amount: 5000, email: 'not-an-email' }
+      body: { amount: 5000, email: 'changed@example.test' }
     });
-    assert.equal(invalidEmail.response.status, 400);
+    assert.equal(emailOverride.response.status, 200);
+    assert.equal(initializationRequests.at(-1).email, 'monetrixinvesment9@gmail.com');
 
     const minimum = await initializePayment(1000);
     assert.equal(minimum.payment.amount, 1000);
@@ -574,4 +575,55 @@ test('Paystack collection is verified, idempotent, and user-owned', async (t) =>
   });
 
   assert.ok(userId);
+});
+
+test('enforces withdrawal minimum and expires pending deposits after 24 hours', async () => {
+  const tooSmall = await request('/api/withdrawals', {
+    method: 'POST',
+    body: { amount: 2999, bankName: 'Test Bank', accountNumber: '0123456789' }
+  });
+  assert.equal(tooSmall.response.status, 400);
+  assert.match(tooSmall.data.message, /₦3,000/);
+
+  const initialized = await initializePayment(5000);
+  const deposit = (await adminDeposits()).find((item) => item.paystackReference === initialized.payment.reference);
+  assert.ok(deposit);
+
+  const storePath = path.join(dataDirectory, 'store.json');
+  const store = JSON.parse(fs.readFileSync(storePath, 'utf8'));
+  const expiredAt = Date.now() - 24 * 60 * 60 * 1000 - 1;
+  const storedDeposit = store.deposits.find((item) => item.id === deposit.id);
+  storedDeposit.createdAt = expiredAt;
+  storedDeposit.submittedAt = expiredAt;
+  fs.writeFileSync(storePath, JSON.stringify(store, null, 2));
+
+  const remainingDeposits = await adminDeposits();
+  assert.ok(!remainingDeposits.some((item) => item.id === deposit.id));
+  const updatedStore = JSON.parse(fs.readFileSync(storePath, 'utf8'));
+  assert.equal(updatedStore.payments.find((item) => item.id === deposit.paymentId).status, 'expired');
+  assert.equal(updatedStore.transactions.find((item) => item.meta && item.meta.depositId === deposit.id).status, 'expired');
+});
+
+test('allows an authenticated administrator to delete a user and their account records', async () => {
+  const unauthorized = await request(`/api/admin/users/${encodeURIComponent(userId)}`, {
+    method: 'DELETE',
+    cookie: null
+  });
+  assert.equal(unauthorized.response.status, 401);
+
+  const removed = await request(`/api/admin/users/${encodeURIComponent(userId)}`, {
+    method: 'DELETE',
+    headers: { 'x-admin-token': adminToken }
+  });
+  assert.equal(removed.response.status, 200);
+  assert.equal(removed.data.userId, userId);
+
+  const users = await request('/api/admin/users', { headers: { 'x-admin-token': adminToken } });
+  assert.ok(!users.data.users.some((user) => user.id === userId));
+
+  const store = JSON.parse(fs.readFileSync(path.join(dataDirectory, 'store.json'), 'utf8'));
+  for(const collection of ['deposits', 'payments', 'withdrawals', 'transactions', 'verifications', 'notifications']){
+    assert.ok(store[collection].every((item) => item.userId !== userId), `${collection} should not retain deleted user records`);
+  }
+  assert.ok(store.auditLogs.some((entry) => entry.action === 'delete_user' && entry.details.userId === userId));
 });

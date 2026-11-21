@@ -33,6 +33,24 @@ document.addEventListener('DOMContentLoaded', async () => {
     return `₦${formatN(value || 0)}`;
   }
 
+  function dashboardIcon(name){
+    const paths = {
+      balance: '<rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18M16 15h2"/>',
+      earnings: '<path d="M3 17l6-6 4 4 8-9"/><path d="M15 6h6v6"/>',
+      'login-rewards': '<path d="M12 3v18M17 7.5a4 4 0 0 0-4-2.5H10a3 3 0 0 0 0 6h4a3 3 0 0 1 0 6h-3a4 4 0 0 1-4-2.5"/>',
+      referral: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM20 8v6M23 11h-6"/>',
+      plan: '<path d="M4 19V5M4 19h17"/><path d="m7 15 4-4 3 2 6-7"/>',
+      deposit: '<path d="M12 3v12m-5-5 5 5 5-5"/><path d="M5 17v3h14v-3"/>',
+      withdrawal: '<path d="M12 21V9m-5 5 5-5 5 5"/><path d="M5 7V4h14v3"/>',
+      transactions: '<path d="M8 4h11v16H5V7h3z"/><path d="M8 4v4H5m4 4h7m-7 4h7"/>',
+      support: '<path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8z"/>',
+      notifications: '<path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/>',
+      home: '<path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-6v-7h-4v7H4a1 1 0 0 1-1-1z"/>',
+      profile: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>'
+    };
+    return `<svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[name] || paths.transactions}</svg>`;
+  }
+
   function renderWalletCards(data){
     const cards = [
       { label: 'Available Balance', value: formatMoney(data.balance || 0), type: 'balance' },
@@ -45,11 +63,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     walletCardsEl.innerHTML = cards.map((card) => {
       const isBalance = card.type === 'balance';
       return `
-        <article class="wallet-card">
+        <article class="wallet-card wallet-card--${card.type}">
           <div class="dashboard-wallet-inline">
             <div>
-              <div class="muted">${card.label}</div>
-              <div class="balance-amount ${isBalance ? 'balance-value' : ''}" data-balance-scale="${isBalance ? 'balance' : 'other'}">${card.value}</div>
+              <div class="wallet-card-label">${dashboardIcon(card.type)}<span>${card.label}</span></div>
+              <div class="balance-amount ${isBalance ? 'balance-value' : ''}" data-balance-scale="${isBalance ? 'balance' : 'other'}">${card.type === 'plan' ? escapeHtml(card.value) : card.value}</div>
             </div>
             ${isBalance ? '<button class="balance-toggle" type="button" id="toggle-balance-btn">Hide Balance</button>' : ''}
           </div>
@@ -140,7 +158,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     transactionsListEl.innerHTML = list.map((transaction) => {
       const type = transaction.type || 'transaction';
-      const icon = type === 'deposit' ? '💳' : type === 'withdrawal' ? '🏦' : '✨';
+      const icon = dashboardIcon(type === 'deposit' ? 'deposit' : type === 'withdrawal' || type === 'wallet_debit' ? 'withdrawal' : type === 'plan_activation' ? 'plan' : type === 'referral_earnings' ? 'referral' : 'transactions');
       const isDebit = type === 'withdrawal' || type === 'wallet_debit' || type === 'plan_activation';
       const amountClass = isDebit ? 'negative' : 'positive';
       const sign = isDebit ? '-' : '+';

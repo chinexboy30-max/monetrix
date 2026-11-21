@@ -8,7 +8,9 @@ MONETRIX INVEST is an investment platform frontend backed by the existing lightw
 - Wallet balance, welcome bonus, and investment plans
 - Paystack-hosted NGN deposit checkout with server-side verification and signed webhooks
 - Deposits of at least ₦100 use Paystack checkout only and remain pending until an administrator approves a verified payment
-- Withdrawals are available Tuesdays and Thursdays from 9:00 AM inclusive to 9:00 PM exclusive Africa/Lagos time and are paid manually by an administrator
+- Withdrawals have a minimum amount of ₦3,000, are available Tuesdays and Thursdays from 9:00 AM inclusive to 9:00 PM exclusive Africa/Lagos time, and are paid manually by an administrator
+- Pending deposits are removed after 24 hours; their payment and transaction records are retained with an expired status for reconciliation
+- Administrators can permanently delete user accounts and their associated account records
 - Administrator announcements and decision messages expire from the user inbox after 24 hours
 - Active investment plan support with server-managed 24-hour countdown payout logic
 - ₦50 server-side daily login reward, credited once per business day

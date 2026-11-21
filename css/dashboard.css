@@ -63,3 +63,90 @@
   .referral-card .row{align-items:stretch}
   .referral-card .row .btn{flex:1}
 }
+
+.ui-icon{display:block;width:20px;height:20px;flex:0 0 auto}
+.nav-icon{width:20px;height:20px;font-size:inherit}
+.admin-shell{max-width:1440px}
+.admin-header{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;margin-bottom:22px}
+.admin-header h1{font-size:clamp(1.8rem,4vw,2.8rem);margin-bottom:8px}
+.admin-header p{max-width:650px;margin-bottom:0}
+.admin-token-card{width:min(360px,100%);padding:16px}
+.admin-token-card label{display:block;margin-bottom:8px;font-size:.78rem}
+.admin-token-card input,.admin-search input{min-width:0;min-height:42px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:rgba(3,10,35,.6);color:var(--white)}
+.admin-token-card input{width:100%}
+.admin-stats{grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:20px}
+.admin-stats .wallet-card{min-height:100px;padding:17px}
+.admin-workspace-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start;gap:18px}
+.admin-section{min-width:0;padding:21px}
+.admin-section--deposits,.admin-section--transactions{grid-column:1/-1}
+.admin-section .section-heading{align-items:center;margin-bottom:14px}
+.admin-section .section-heading p{margin:0;font-size:.82rem}
+.admin-search{display:flex;align-items:center;gap:8px}
+.admin-search input{width:min(260px,34vw)}
+.admin-search .btn{min-height:42px;padding:9px 12px}
+.admin-list .note-panel{padding:16px}
+.admin-list .button-row{display:flex}
+.admin-list .btn.danger{border-color:rgba(255,113,134,.28);background:rgba(255,113,134,.08);color:#ff9cac}
+.admin-list .btn.danger:hover{border-color:var(--danger);background:rgba(255,113,134,.17)}
+.admin-announcement-form{margin-top:18px}
+.admin-announcement-form .btn{justify-self:start}
+
+.dashboard-shell{gap:18px}
+.dashboard-wallet-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+.dashboard-wallet-grid .wallet-card{min-height:112px;padding:17px}
+.dashboard-wallet-grid .wallet-card--balance{grid-column:span 2;min-height:148px;padding:22px;background:linear-gradient(120deg,#0b49a7,#0877e8 56%,#00a8c4);border-color:rgba(255,255,255,.2)}
+.wallet-card--balance::after{width:200px;height:200px;right:-18px;top:-62px;background:radial-gradient(circle,rgba(255,255,255,.24),transparent 68%)}
+.wallet-card--balance .dashboard-wallet-inline{align-items:flex-start}
+.wallet-card--balance .wallet-card-label{color:rgba(255,255,255,.82)}
+.wallet-card--balance .balance-value{font-size:clamp(1.8rem,4vw,2.6rem)}
+.wallet-card--balance .balance-toggle{position:relative;z-index:1;border-color:rgba(255,255,255,.3);color:white;background:rgba(255,255,255,.11)}
+.wallet-card-label{position:relative;z-index:1;display:flex;align-items:center;gap:8px;margin-bottom:15px;color:var(--muted);font-size:.72rem;font-weight:700;letter-spacing:.045em}
+.wallet-card-label .ui-icon{width:18px;height:18px;color:var(--cyan)}
+.wallet-card--balance .wallet-card-label .ui-icon{color:white}
+.dashboard-wallet-grid .balance-amount{position:relative;z-index:1;font-size:1.28rem}
+.dashboard-wallet-grid .wallet-card--balance .balance-amount{font-size:clamp(1.8rem,4vw,2.6rem)}
+.dashboard-header{background:linear-gradient(115deg,rgba(17,31,73,.97),rgba(8,38,86,.95))}
+.icon-pill{min-height:44px}
+.icon-pill .ui-icon{color:var(--cyan)}
+.notification-label{font-size:.78rem}
+.quick-actions{padding:20px}
+.actions-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+.action{min-height:72px;padding:12px}
+.action-icon{width:38px;height:38px}
+.action-icon .ui-icon{width:19px;height:19px}
+.transactions-card{padding:22px}
+.transaction-icon .ui-icon{width:19px;height:19px}
+.transaction-row{padding:13px 15px}
+
+@media(min-width:900px){
+  .dashboard-shell{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));align-items:start}
+  .dashboard-shell>.dashboard-header,.dashboard-shell>.wallet-stack{grid-column:1/-1}
+  .dashboard-shell>.dashboard-header{margin-bottom:0}
+  .dashboard-shell>.wallet-stack,.dashboard-shell>.dashboard-plan-card,.dashboard-shell>.quick-actions,.dashboard-shell>.transactions-card,.dashboard-shell>.announcement-banner{margin-top:0}
+  .dashboard-shell>.dashboard-plan-card,.dashboard-shell>.transactions-card{grid-column:span 7}
+  .dashboard-shell>.quick-actions,.dashboard-shell>.announcement-banner{grid-column:span 5}
+  .dashboard-wallet-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+@media(max-width:899px){
+  .dashboard-shell{display:grid;gap:14px}
+  .dashboard-shell>.wallet-stack,.dashboard-shell>.dashboard-plan-card,.dashboard-shell>.quick-actions,.dashboard-shell>.transactions-card,.dashboard-shell>.announcement-banner{margin-top:0}
+}
+@media(max-width:680px){
+  .admin-header{align-items:stretch;flex-direction:column;gap:14px}
+  .admin-token-card{width:100%}
+  .admin-stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .admin-workspace-grid{grid-template-columns:1fr}
+  .admin-section--deposits,.admin-section--transactions{grid-column:auto}
+  .admin-search{width:100%;flex-wrap:wrap}
+  .admin-search input{width:100%;flex:1 1 100%}
+  .admin-section .section-heading{align-items:flex-start}
+  .dashboard-wallet-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .actions-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:420px){
+  .dashboard-wallet-grid{grid-template-columns:1fr}
+  .dashboard-wallet-grid .wallet-card--balance{grid-column:auto}
+  .admin-stats{grid-template-columns:1fr}
+  .admin-section{padding:16px}
+  .notification-label{display:none}
+}

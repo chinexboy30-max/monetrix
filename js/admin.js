@@ -131,6 +131,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         <div class="muted">Phone: ${escapeHtml(user.phone || '—')}</div>
         <div class="muted">Balance: ₦${formatN(user.balance || 0)}</div>
         <div class="muted">Plan: ${user.activePlan ? user.activePlan.name : 'No active plan'}</div>
+        <div class="button-row">
+          <button class="btn danger" type="button" data-action="delete-user" data-id="${escapeHtml(user.id)}">Delete user</button>
+        </div>
       </article>
     `).join('');
   }
@@ -211,20 +214,22 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     }
     if(action === 'mark-withdrawal-paid' && !window.confirm('Only continue after you have manually sent this bank transfer to the verified account. Mark this withdrawal as paid?')) return;
+    if(action === 'delete-user' && !window.confirm('Permanently delete this user and their account records? This cannot be undone.')) return;
 
     let endpoint = '';
     if(action === 'approve-deposit') endpoint = `/api/admin/deposits/${id}/approve`;
     if(action === 'reject-deposit') endpoint = `/api/admin/deposits/${id}/reject`;
     if(action === 'mark-withdrawal-paid') endpoint = `/api/admin/withdrawals/${id}/mark-paid`;
     if(action === 'reject-withdrawal') endpoint = `/api/admin/withdrawals/${id}/reject`;
+    if(action === 'delete-user') endpoint = `/api/admin/users/${encodeURIComponent(id)}`;
 
     try {
-      const options = { method: 'POST' };
+      const options = { method: action === 'delete-user' ? 'DELETE' : 'POST' };
       if(action.includes('reject')) {
         options.body = JSON.stringify({ reason });
       }
       await adminFetch(endpoint, options);
-      showToast(action === 'mark-withdrawal-paid' ? 'Withdrawal marked paid.' : `${action.replace('-', ' ')} completed.`, 'success');
+      showToast(action === 'mark-withdrawal-paid' ? 'Withdrawal marked paid.' : action === 'delete-user' ? 'User deleted.' : `${action.replace('-', ' ')} completed.`, 'success');
       await loadQueue();
     } catch (err) {
       showToast(err.message || 'Admin action failed', 'error');

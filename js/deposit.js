@@ -3,7 +3,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   const form = document.getElementById('paystack-deposit-form');
   const amountInput = document.getElementById('deposit-amount');
-  const emailInput = document.getElementById('deposit-email');
   const statusPanel = document.getElementById('deposit-payment-status');
   const statusMessage = document.getElementById('deposit-payment-message');
   const referenceLabel = document.getElementById('deposit-payment-reference');
@@ -75,7 +74,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const button = form.querySelector('button[type="submit"]');
     const stopLoading = setLoading(button, true);
     try{
-      const response = await api.initializePaystackPayment({ amount, email: emailInput.value.trim() });
+      const response = await api.initializePaystackPayment({ amount });
       const checkoutUrl = new URL(response.authorizationUrl);
       if(checkoutUrl.origin !== 'https://checkout.paystack.com'){
         throw new Error('The checkout address returned by the server is invalid.');

@@ -45,8 +45,10 @@ if(process.env.NODE_ENV === 'production' && Buffer.byteLength(ADMIN_TOKEN, 'utf8
 }
 const PAYSTACK_API_BASE = 'https://api.paystack.co';
 const MIN_DEPOSIT_AMOUNT = 1000;
+const MIN_WITHDRAWAL_AMOUNT = 3000;
 const PAYSTACK_DEFAULT_EMAIL = 'monetrixinvesment9@gmail.com';
 const ADMIN_MESSAGE_TTL_MS = 24 * 60 * 60 * 1000;
+const PENDING_DEPOSIT_TTL_MS = 24 * 60 * 60 * 1000;
 const LEGACY_ADMIN_NOTIFICATION_TITLES = new Set([
   'Deposit approved',
   'Deposit rejected',
@@ -168,7 +170,32 @@ function readData(){
   }catch(e){
     throw new Error('The application data store contains invalid JSON.', { cause: e });
   }
-  return normalizeData(parsed);
+  const data = normalizeData(parsed);
+  const cutoff = Date.now() - PENDING_DEPOSIT_TTL_MS;
+  const expiredDeposits = data.deposits.filter((deposit) => {
+    const createdAt = Number(deposit.submittedAt || deposit.createdAt);
+    return deposit.status === 'pending' && Number.isFinite(createdAt) && createdAt <= cutoff;
+  });
+  if(expiredDeposits.length){
+    const expiredIds = new Set(expiredDeposits.map((deposit) => deposit.id));
+    const expiredPaymentIds = new Set();
+    for(const payment of data.payments){
+      if(expiredIds.has(payment.depositId)){
+        payment.status = 'expired';
+        payment.statusHistory = payment.statusHistory || [];
+        payment.statusHistory.push({ status: 'expired', at: Date.now() });
+        expiredPaymentIds.add(payment.id);
+      }
+    }
+    for(const transaction of data.transactions){
+      if(expiredIds.has(transaction.meta && transaction.meta.depositId) || expiredPaymentIds.has(transaction.meta && transaction.meta.paymentId)){
+        transaction.status = 'expired';
+      }
+    }
+    data.deposits = data.deposits.filter((deposit) => !expiredIds.has(deposit.id));
+    writeData(data);
+  }
+  return data;
 }
 
 function writeData(data){
@@ -800,15 +827,12 @@ app.get('/api/paystack/config', (req, res) => {
 });
 
 app.post('/api/paystack/initialize', authMiddleware, async (req, res) => {
-  const { amount, email } = req.body || {};
+  const { amount } = req.body || {};
   const depositAmount = Number(amount);
   if(!Number.isSafeInteger(depositAmount) || depositAmount < MIN_DEPOSIT_AMOUNT || !Number.isSafeInteger(depositAmount * 100)){
     return res.status(400).json({ message: 'Enter a whole-naira deposit amount of at least ₦1,000.' });
   }
-  const normalizedEmail = String(email || PAYSTACK_DEFAULT_EMAIL).trim();
-  if(normalizedEmail.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)){
-    return res.status(400).json({ message: 'Enter a valid email address for Paystack checkout.' });
-  }
+  const normalizedEmail = PAYSTACK_DEFAULT_EMAIL;
 
   let checkoutSettings;
   try{
@@ -1155,7 +1179,7 @@ app.post('/api/withdrawals', authMiddleware, (req, res) => {
   if(!Number.isSafeInteger(withdrawAmount) || withdrawAmount <= 0) return res.status(400).json({ message: 'Enter a whole-naira withdrawal amount.' });
   if(!bankName) return res.status(400).json({ message: 'Bank selection is required' });
   if(!accountNumber || !/^\d{10}$/.test(String(accountNumber))) return res.status(400).json({ message: 'Account number must contain exactly 10 digits' });
-  if(withdrawAmount < 1000) return res.status(400).json({ message: 'Minimum withdrawal amount is ₦1,000' });
+  if(withdrawAmount < MIN_WITHDRAWAL_AMOUNT) return res.status(400).json({ message: 'Minimum withdrawal amount is ₦3,000' });
 
   const availability = getWithdrawalAvailability();
   if(!availability.available) return res.status(400).json({ message: availability.message });
@@ -1342,6 +1366,31 @@ app.get('/api/admin/users', adminAuthMiddleware, (req, res) => {
   res.json({ users: (data.users || []).map(user => sanitizeUser(user)) });
 });
 
+app.delete('/api/admin/users/:id', adminAuthMiddleware, (req, res) => {
+  const data = readData();
+  const user = findUserById(data, req.params.id);
+  if(!user) return res.status(404).json({ message: 'User not found' });
+
+  const userId = user.id;
+  data.users = data.users.filter((item) => item.id !== userId);
+  data.deposits = data.deposits.filter((item) => item.userId !== userId);
+  data.payments = data.payments.filter((item) => item.userId !== userId);
+  data.withdrawals = data.withdrawals.filter((item) => item.userId !== userId);
+  data.transactions = data.transactions.filter((item) => item.userId !== userId);
+  data.verifications = data.verifications.filter((item) => item.userId !== userId);
+  data.notifications = data.notifications.filter((item) => item.userId !== userId);
+  data.users.forEach((item) => {
+    if(item.referredBy === userId) item.referredBy = null;
+  });
+  addAuditLog(data, {
+    adminToken: req.admin.token,
+    action: 'delete_user',
+    details: { userId, phone: user.phone || null }
+  });
+  writeData(data);
+  res.json({ ok: true, userId });
+});
+
 app.get('/api/admin/deposit-accounts', adminAuthMiddleware, (req, res) => {
   const data = readData();
   res.json({ accounts: data.depositAccounts || DEFAULT_DEPOSIT_ACCOUNTS });
@@ -1457,6 +1506,15 @@ app.use((req, res, next) => {
 
 const port = process.env.PORT || 3000;
 if(require.main === module){
+  readData();
+  const pendingDepositCleanup = setInterval(() => {
+    try{
+      readData();
+    }catch(error){
+      console.error('Unable to expire pending deposits:', error);
+    }
+  }, 60 * 1000);
+  pendingDepositCleanup.unref();
   app.listen(port, () => console.log(`MONETRIX INVEST backend running on http://localhost:${port}`));
 }
 

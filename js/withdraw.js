@@ -83,7 +83,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
     const acctName = document.getElementById('account-name').value.trim();
     const verificationId = document.getElementById('verification-id').value;
     if(!amt || amt <= 0){ stopLoading(); showToast('Enter a valid amount', 'warning'); return; }
-    if(amt < 1000){ stopLoading(); showToast('Minimum withdrawal amount is ₦1,000', 'warning'); return; }
+    if(amt < 3000){ stopLoading(); showToast('Minimum withdrawal amount is ₦3,000', 'warning'); return; }
     if(amt > (u.balance||0)){ stopLoading(); showToast('Insufficient balance', 'warning'); return; }
     if(!bank || !acctNo){ stopLoading(); showToast('Please complete your bank details', 'warning'); return; }
     if(!/^\d{10}$/.test(acctNo)){ stopLoading(); showToast('Account number must be exactly 10 digits', 'warning'); return; }
