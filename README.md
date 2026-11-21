@@ -8,7 +8,8 @@ MONETRIX INVEST is an investment platform frontend backed by the existing lightw
 - Wallet balance, welcome bonus, and investment plans
 - Paystack-hosted NGN deposit checkout with server-side verification and signed webhooks
 - Deposits of at least ₦100 use Paystack checkout only and remain pending until an administrator approves a verified payment
-- Withdrawals are available daily from 9:00 AM to 9:00 PM Africa/Lagos time and are paid manually by an administrator
+- Withdrawals are available Tuesdays and Thursdays from 9:00 AM inclusive to 9:00 PM exclusive Africa/Lagos time and are paid manually by an administrator
+- Administrator announcements and decision messages expire from the user inbox after 24 hours
 - Active investment plan support with server-managed 24-hour countdown payout logic
 - ₦50 server-side daily login reward, credited once per business day
 - 10% reward on a referee's first approved deposit
@@ -39,18 +40,20 @@ MONETRIX INVEST is an investment platform frontend backed by the existing lightw
 ## Paystack setup
 1. Copy `.env.example` to `.env` for local work, or set the variables in your hosting provider. Never commit `.env`.
 2. Set matching Paystack **test** keys in `PAYSTACK_PUBLIC_KEY` and `PAYSTACK_SECRET_KEY`.
-3. Use `PAYSTACK_CALLBACK_URL=http://localhost:3000/deposit.html` locally. In production, use the public HTTPS deposit page URL.
+3. Use `PAYSTACK_CALLBACK_URL=http://localhost:3000/deposit.html` locally. Production uses `https://monetrix-production.up.railway.app/deposit.html`; if unset, the server derives it from `BASE_URL`.
 4. Run `npm test` for the mocked collection and webhook tests, then start with `npm start`.
 
 The backend creates a unique reference and pending payment/deposit/transaction records before requesting hosted checkout. It verifies callback and webhook references directly with Paystack and checks the expected amount and NGN currency. A successful provider payment is not by itself a wallet credit: the existing operations approval flow credits only a server-verified Paystack deposit. Failed, cancelled, mismatched, and legacy bank-transfer deposits cannot be approved. No Paystack transfers or dedicated virtual accounts are implemented. Withdrawals collect verified bank details for administrator review and are paid manually outside Monetrix.
 
 Configure this webhook URL in the Paystack dashboard after hosting:
 
-`https://<your-deployed-domain>/api/paystack/webhook`
+`https://monetrix-production.up.railway.app/api/paystack/webhook`
+
+The hosted checkout callback is `https://monetrix-production.up.railway.app/deposit.html`; it reads Paystack's returned reference and verifies it through the existing authenticated `/api/paystack/verify` route. The webhook route is `/api/paystack/webhook`.
 
 Paystack signs webhook bodies with the API secret key. Leave `PAYSTACK_WEBHOOK_SECRET` blank to use `PAYSTACK_SECRET_KEY`, or set it to the same secret. Do not expose either secret in frontend code.
 
-For live keys, use HTTPS and set `PAYMENT_MODE=live`. Set `PAYSTACK_COLLECTION_APPROVED=true` only after Paystack has approved the business and collection model. The app deliberately refuses live checkout without that confirmation and refuses test keys in production.
+For live keys, use `NODE_ENV=production`, HTTPS, `PAYMENT_MODE=live`, matching live public/secret keys, and `PAYSTACK_COLLECTION_APPROVED=true` following Paystack's collection approval. The app refuses live checkout outside production, without the explicit approval flag, or with mismatched/test keys.
 
 Integration references: [Accept Payments](https://paystack.com/docs/payments/accept-payments/), [Verify Payments](https://paystack.com/docs/payments/verify-payments/), and [Webhooks](https://paystack.com/docs/payments/webhooks/).
 

@@ -31,20 +31,20 @@ After hosting, register this URL in the Paystack dashboard:
 Test keys are rejected when `NODE_ENV=production`. Hosted staging uses `NODE_ENV=staging` and HTTPS cookies. Do not treat test transactions as real funds.
 
 ## Live collection
-Only after Paystack approves Monetrix's business and collection model, switch to:
+Paystack has approved Monetrix's business and collection model. To enable live checkout, switch to:
 - `NODE_ENV=production`
 - `PAYMENT_MODE=live`
 - `APP_TIMEZONE=Africa/Lagos`
 - Matching live `pk_live_...` and `sk_live_...` keys
 - `JWT_SECRET` and `ADMIN_TOKEN` (private random values, at least 32 characters each)
-- `BASE_URL=https://<your-live-domain>`
-- `PAYSTACK_CALLBACK_URL=https://<your-live-domain>/deposit.html`
+- `BASE_URL=https://monetrix-production.up.railway.app`
+- `PAYSTACK_CALLBACK_URL=https://monetrix-production.up.railway.app/deposit.html`
 - `PAYSTACK_COLLECTION_APPROVED=true`
 
-Register `https://<your-live-domain>/api/paystack/webhook` in the Paystack dashboard. Always use HTTPS.
+Register `https://monetrix-production.up.railway.app/api/paystack/webhook` in the Paystack dashboard. If `PAYSTACK_CALLBACK_URL` is unset, it is derived from `BASE_URL`; the callback must resolve to the existing `/deposit.html` page.
 
 The JSON store only supports a single app instance. Ensure the Railway volume is mounted at the app's `data` directory and configure one instance; use a transactional database before scaling horizontally. Payments are verified directly with Paystack and require admin approval before wallet credit.
 
-Deposits use Paystack checkout only, with a ₦100 minimum. Withdrawals are accepted daily from 9:00 AM (inclusive) until 9:00 PM (exclusive), Africa/Lagos time. Administrators must send the bank transfer manually and only then use **Mark paid** in the admin dashboard; Monetrix does not call Paystack transfers.
+Deposits use Paystack checkout only, with a ₦100 minimum. Withdrawals are accepted Tuesdays and Thursdays from 9:00 AM (inclusive) until 9:00 PM (exclusive), Africa/Lagos time. User-facing admin announcements and decision messages expire after 24 hours. Administrators must send the bank transfer manually and only then use **Mark paid** in the admin dashboard; Monetrix does not call Paystack transfers.
 
 Run `npm test` and verify `/healthz` before enabling traffic.

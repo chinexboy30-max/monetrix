@@ -45,9 +45,17 @@ if(process.env.NODE_ENV === 'production' && Buffer.byteLength(ADMIN_TOKEN, 'utf8
 }
 const PAYSTACK_API_BASE = 'https://api.paystack.co';
 const MIN_DEPOSIT_AMOUNT = 100;
+const ADMIN_MESSAGE_TTL_MS = 24 * 60 * 60 * 1000;
+const LEGACY_ADMIN_NOTIFICATION_TITLES = new Set([
+  'Deposit approved',
+  'Deposit rejected',
+  'Withdrawal paid',
+  'Withdrawal rejected'
+]);
 const DAILY_LOGIN_REWARD = 50;
 const REFERRAL_REWARD_RATE = 0.10;
 const APP_TIMEZONE = process.env.APP_TIMEZONE || 'Africa/Lagos';
+const WITHDRAWAL_TIMEZONE = 'Africa/Lagos';
 const SECURE_COOKIES = ['production', 'staging'].includes(process.env.NODE_ENV);
 const USER_COOKIE_OPTIONS = { httpOnly: true, sameSite: 'lax', secure: SECURE_COOKIES, maxAge: 7 * 24 * 60 * 60 * 1000 };
 const ADMIN_COOKIE_OPTIONS = { httpOnly: true, sameSite: 'lax', secure: SECURE_COOKIES, maxAge: 24 * 60 * 60 * 1000 };
@@ -239,16 +247,20 @@ function assignDepositAccountToUser(data, user){
   return accountPayload;
 }
 
-function createNotification(data, { userId, title, text, type = 'info' }){
+function createNotification(data, { userId, title, text, type = 'info', expiresAfterMs }){
+  const createdAt = Date.now();
   const notification = {
     id: 'notif-' + Date.now(),
     userId,
     title,
     text,
     type,
-    createdAt: Date.now(),
+    createdAt,
     read: false
   };
+  if(Number.isFinite(expiresAfterMs) && expiresAfterMs > 0){
+    notification.expiresAt = createdAt + expiresAfterMs;
+  }
   data.notifications = data.notifications || [];
   data.notifications.push(notification);
   return notification;
@@ -310,9 +322,11 @@ function getPaystackMode(){
 
 function getPaystackCallbackUrl(){
   const configuredUrl = process.env.PAYSTACK_CALLBACK_URL || (
-    process.env.NODE_ENV === 'production'
-      ? ''
-      : `http://localhost:${process.env.PORT || 3000}/deposit.html`
+    process.env.BASE_URL
+      ? `${process.env.BASE_URL.replace(/\/$/, '')}/deposit.html`
+      : process.env.NODE_ENV === 'production'
+        ? ''
+        : `http://localhost:${process.env.PORT || 3000}/deposit.html`
   );
   if(!configuredUrl) throw new Error('PAYSTACK_CALLBACK_URL must be configured before enabling Paystack checkout.');
 
@@ -325,8 +339,25 @@ function getPaystackCallbackUrl(){
   if(!['http:', 'https:'].includes(callbackUrl.protocol) || callbackUrl.username || callbackUrl.password){
     throw new Error('PAYSTACK_CALLBACK_URL must use HTTP or HTTPS and must not contain credentials.');
   }
+  if(callbackUrl.pathname !== '/deposit.html'){
+    throw new Error('PAYSTACK_CALLBACK_URL must point to the existing /deposit.html payment callback page.');
+  }
   if(SECURE_COOKIES && callbackUrl.protocol !== 'https:'){
     throw new Error('PAYSTACK_CALLBACK_URL must use HTTPS in hosted environments.');
+  }
+  if(process.env.BASE_URL){
+    let appUrl;
+    try{
+      appUrl = new URL(process.env.BASE_URL);
+    }catch(error){
+      throw new Error('BASE_URL must be a valid absolute URL when Paystack checkout is enabled.', { cause: error });
+    }
+    if(SECURE_COOKIES && (appUrl.protocol !== 'https:' || appUrl.username || appUrl.password)){
+      throw new Error('BASE_URL must use HTTPS and must not contain credentials in hosted environments.');
+    }
+    if(appUrl.origin !== callbackUrl.origin){
+      throw new Error('PAYSTACK_CALLBACK_URL must use the same domain as BASE_URL.');
+    }
   }
   return callbackUrl.toString();
 }
@@ -337,8 +368,16 @@ function assertPaystackCheckoutEnabled(){
   if(mode === 'test' && process.env.NODE_ENV === 'production'){
     throw new Error('Paystack test keys cannot be used in production.');
   }
-  if(mode === 'live' && !PAYSTACK_COLLECTION_APPROVED){
-    throw new Error('Live Paystack checkout is disabled until collection approval is explicitly confirmed.');
+  if(mode === 'live'){
+    if(process.env.NODE_ENV !== 'production'){
+      throw new Error('Live Paystack checkout can only be enabled in production.');
+    }
+    if(process.env.PAYMENT_MODE !== 'live'){
+      throw new Error('PAYMENT_MODE=live must be configured before enabling live checkout.');
+    }
+    if(!PAYSTACK_COLLECTION_APPROVED){
+      throw new Error('Live Paystack checkout is disabled until collection approval is explicitly confirmed.');
+    }
   }
   return { mode, callbackUrl: getPaystackCallbackUrl() };
 }
@@ -402,17 +441,87 @@ function getBusinessDate(timestamp = Date.now()){
   return new Intl.DateTimeFormat('en-CA', { timeZone: APP_TIMEZONE }).format(new Date(timestamp));
 }
 
-function getBusinessHour(timestamp = Date.now()){
-  return Number(new Intl.DateTimeFormat('en-GB', {
-    timeZone: APP_TIMEZONE,
+function getBusinessDateTimeParts(timestamp = Date.now()){
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: WITHDRAWAL_TIMEZONE,
+    weekday: 'short',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
     hour: '2-digit',
+    minute: '2-digit',
     hourCycle: 'h23'
-  }).format(new Date(timestamp)));
+  }).formatToParts(new Date(timestamp));
+  return Object.fromEntries(parts.filter(part => part.type !== 'literal').map(part => [part.type, part.value]));
 }
 
 function isWithdrawalWindowOpen(timestamp = Date.now()){
-  const hour = getBusinessHour(timestamp);
-  return hour >= 9 && hour < 21;
+  const parts = getBusinessDateTimeParts(timestamp);
+  return ['Tue', 'Thu'].includes(parts.weekday) && Number(parts.hour) >= 9 && Number(parts.hour) < 21;
+}
+
+function getNextWithdrawalOpening(timestamp = Date.now()){
+  const parts = getBusinessDateTimeParts(timestamp);
+  const weekdayNumber = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 }[parts.weekday];
+  const localMinutes = Number(parts.hour) * 60 + Number(parts.minute);
+  let dayOffset = null;
+  for(let offset = 0; offset <= 7; offset++){
+    const weekday = (weekdayNumber + offset) % 7;
+    if(![2, 4].includes(weekday)) continue;
+    if(offset === 0 && localMinutes >= 9 * 60) continue;
+    dayOffset = offset;
+    break;
+  }
+  if(dayOffset === null) throw new Error('Unable to calculate the next withdrawal opening.');
+
+  const localDate = new Date(Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day) + dayOffset, 9));
+  const target = {
+    year: localDate.getUTCFullYear(),
+    month: localDate.getUTCMonth() + 1,
+    day: localDate.getUTCDate(),
+    hour: 9
+  };
+  let candidate = Date.UTC(target.year, target.month - 1, target.day, target.hour);
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: WITHDRAWAL_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23'
+  });
+  for(let attempt = 0; attempt < 3; attempt++){
+    const localParts = Object.fromEntries(formatter.formatToParts(new Date(candidate))
+      .filter(part => part.type !== 'literal')
+      .map(part => [part.type, Number(part.value)]));
+    const representedLocalTime = Date.UTC(localParts.year, localParts.month - 1, localParts.day, localParts.hour, localParts.minute);
+    const adjustment = Date.UTC(target.year, target.month - 1, target.day, target.hour) - representedLocalTime;
+    candidate += adjustment;
+    if(adjustment === 0) break;
+  }
+  return candidate;
+}
+
+function getWithdrawalAvailability(timestamp = Date.now()){
+  const available = isWithdrawalWindowOpen(timestamp);
+  const nextOpenAt = getNextWithdrawalOpening(timestamp);
+  const nextOpeningText = new Intl.DateTimeFormat('en-NG', {
+    timeZone: WITHDRAWAL_TIMEZONE,
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit'
+  }).format(new Date(nextOpenAt));
+  return {
+    available,
+    timezone: WITHDRAWAL_TIMEZONE,
+    nextOpenAt,
+    message: available
+      ? 'Withdrawals are currently available on Tuesdays and Thursdays, from 9:00 AM up to 9:00 PM (exclusive) Africa/Lagos time.'
+      : `Withdrawals are closed. They next open ${nextOpeningText} Africa/Lagos time.`
+  };
 }
 
 function applyDailyLoginReward(data, user){
@@ -636,12 +745,32 @@ app.get('/api/deposit-account', authMiddleware, (req, res) => {
 
 app.get('/api/announcements', (req, res) => {
   const data = readData();
-  res.json({ announcements: data.announcements || [] });
+  const now = Date.now();
+  const announcements = (data.announcements || []).filter((item) => {
+    const createdAt = Number(item.createdAt);
+    const expiresAt = Number(item.expiresAt);
+    const effectiveExpiry = Number.isFinite(expiresAt) ? expiresAt : createdAt + ADMIN_MESSAGE_TTL_MS;
+    return Number.isFinite(createdAt) && effectiveExpiry > now;
+  });
+  res.json({ announcements });
 });
 
 app.get('/api/notifications', authMiddleware, (req, res) => {
   const data = readData();
-  const notifications = (data.notifications || []).filter(n => n.userId === req.user.id).sort((a,b)=>b.createdAt-a.createdAt);
+  const now = Date.now();
+  const notifications = (data.notifications || [])
+    .filter((notification) => {
+      if(notification.userId !== req.user.id) return false;
+      const explicitExpiry = Number(notification.expiresAt);
+      const createdAt = Number(notification.createdAt);
+      const effectiveExpiry = Number.isFinite(explicitExpiry)
+        ? explicitExpiry
+        : LEGACY_ADMIN_NOTIFICATION_TITLES.has(notification.title) && Number.isFinite(createdAt)
+          ? createdAt + ADMIN_MESSAGE_TTL_MS
+          : null;
+      return effectiveExpiry === null || effectiveExpiry > now;
+    })
+    .sort((a,b)=>b.createdAt-a.createdAt);
   res.json({ notifications });
 });
 
@@ -978,6 +1107,10 @@ app.post('/api/deposits', authMiddleware, (req, res) => {
   res.status(410).json({ message: 'Direct bank-transfer deposit submissions are disabled. Use Paystack checkout to fund your wallet.' });
 });
 
+app.get('/api/withdrawals/availability', authMiddleware, (req, res) => {
+  res.json(getWithdrawalAvailability());
+});
+
 app.post('/api/vips/buy', authMiddleware, (req, res) => {
   const { planId } = req.body;
   const plan = VIP_PLANS.find((p) => p.id === Number(planId));
@@ -1015,7 +1148,8 @@ app.post('/api/withdrawals', authMiddleware, (req, res) => {
   if(!accountNumber || !/^\d{10}$/.test(String(accountNumber))) return res.status(400).json({ message: 'Account number must contain exactly 10 digits' });
   if(withdrawAmount < 1000) return res.status(400).json({ message: 'Minimum withdrawal amount is ₦1,000' });
 
-  if(!isWithdrawalWindowOpen()) return res.status(400).json({ message: 'Withdrawals are available only between 9:00 AM and 9:00 PM Africa/Lagos time.' });
+  const availability = getWithdrawalAvailability();
+  if(!availability.available) return res.status(400).json({ message: availability.message });
 
   const data = readData();
   const user = findUserById(data, req.user.id);
@@ -1097,7 +1231,7 @@ app.post('/api/admin/deposits/:id/approve', adminAuthMiddleware, (req, res) => {
   user.balance = (user.balance || 0) + deposit.amount;
   if(data.transactions) data.transactions.forEach(t => { if(t.meta && t.meta.depositId === deposit.id) t.status = 'approved'; });
   recordTransaction(data, { userId: user.id, type: 'wallet_credit', amount: deposit.amount, status: 'completed', meta: { depositId: deposit.id, transactionReference: deposit.transactionReference } });
-  createNotification(data, { userId: deposit.userId, title: 'Deposit approved', text: `Your deposit of ₦${deposit.amount} has been approved and credited to your wallet.`, type: 'success' });
+  createNotification(data, { userId: deposit.userId, title: 'Deposit approved', text: `Your deposit of ₦${deposit.amount} has been approved and credited to your wallet.`, type: 'success', expiresAfterMs: ADMIN_MESSAGE_TTL_MS });
 
   if(deposit.referredBy && isFirstApprovedDeposit && !deposit.referralRewardProcessed){
     const referrer = findUserById(data, deposit.referredBy);
@@ -1128,7 +1262,7 @@ app.post('/api/admin/deposits/:id/reject', adminAuthMiddleware, (req, res) => {
   deposit.statusHistory = deposit.statusHistory || [];
   deposit.statusHistory.push({ status: 'rejected', at: Date.now(), reason: reason || null });
   if(data.transactions) data.transactions.forEach(t => { if(t.meta && t.meta.depositId === deposit.id) t.status = 'rejected'; });
-  createNotification(data, { userId: deposit.userId, title: 'Deposit rejected', text: reason || 'Your deposit request was rejected by the administrator.', type: 'warning' });
+  createNotification(data, { userId: deposit.userId, title: 'Deposit rejected', text: reason || 'Your deposit request was rejected by the administrator.', type: 'warning', expiresAfterMs: ADMIN_MESSAGE_TTL_MS });
   addAuditLog(data, { adminToken: req.admin.token, action: 'reject_deposit', details: { depositId: deposit.id, userId: deposit.userId, reason: reason || null } });
   writeData(data);
   res.json({ deposit });
@@ -1156,7 +1290,7 @@ function markWithdrawalPaid(req, res){
   wd.statusHistory.push({ status: 'paid', at: wd.paidAt });
   if(data.transactions) data.transactions.forEach(t => { if(t.meta && t.meta.withdrawalId === wd.id) t.status = 'paid'; });
   recordTransaction(data, { userId: wd.userId, type: 'wallet_debit', amount: wd.amount, status: 'completed', meta: { withdrawalId: wd.id } });
-  createNotification(data, { userId: wd.userId, title: 'Withdrawal paid', text: `Your withdrawal of ₦${wd.amount} has been marked paid after manual bank transfer.`, type: 'success' });
+  createNotification(data, { userId: wd.userId, title: 'Withdrawal paid', text: `Your withdrawal of ₦${wd.amount} has been marked paid after manual bank transfer.`, type: 'success', expiresAfterMs: ADMIN_MESSAGE_TTL_MS });
   addAuditLog(data, { adminToken: req.admin.token, action: 'mark_withdrawal_paid', details: { withdrawalId: wd.id, userId: wd.userId, amount: wd.amount, payoutMethod: wd.payoutMethod } });
   writeData(data);
   res.json({ withdrawal: wd, user: sanitizeUser(user) });
@@ -1176,7 +1310,7 @@ app.post('/api/admin/withdrawals/:id/reject', adminAuthMiddleware, (req, res) =>
   wd.statusHistory = wd.statusHistory || [];
   wd.statusHistory.push({ status: 'rejected', at: Date.now(), reason: reason || null });
   if(data.transactions) data.transactions.forEach(t => { if(t.meta && t.meta.withdrawalId === wd.id) t.status = 'rejected'; });
-  createNotification(data, { userId: wd.userId, title: 'Withdrawal rejected', text: reason || 'Your withdrawal request was rejected by the administrator.', type: 'warning' });
+  createNotification(data, { userId: wd.userId, title: 'Withdrawal rejected', text: reason || 'Your withdrawal request was rejected by the administrator.', type: 'warning', expiresAfterMs: ADMIN_MESSAGE_TTL_MS });
   addAuditLog(data, { adminToken: req.admin.token, action: 'reject_withdrawal', details: { withdrawalId: wd.id, userId: wd.userId, reason: reason || null } });
   writeData(data);
   res.json({ withdrawal: wd });
@@ -1223,7 +1357,15 @@ app.post('/api/admin/announcements', adminAuthMiddleware, (req, res) => {
   const { title, message, type = 'info' } = req.body || {};
   if(!title || !message) return res.status(400).json({ message: 'Title and message are required' });
   const data = readData();
-  const announcement = { id: 'ann-' + Date.now(), title, message, type, createdAt: Date.now() };
+  const createdAt = Date.now();
+  const announcement = {
+    id: 'ann-' + crypto.randomUUID(),
+    title,
+    message,
+    type,
+    createdAt,
+    expiresAt: createdAt + ADMIN_MESSAGE_TTL_MS
+  };
   data.announcements = data.announcements || [];
   data.announcements.push(announcement);
   writeData(data);
@@ -1309,4 +1451,10 @@ if(require.main === module){
   app.listen(port, () => console.log(`MONETRIX INVEST backend running on http://localhost:${port}`));
 }
 
-module.exports = { app, isValidPaystackSignature, updatePaymentFromVerification, isWithdrawalWindowOpen };
+module.exports = {
+  app,
+  isValidPaystackSignature,
+  updatePaymentFromVerification,
+  isWithdrawalWindowOpen,
+  getWithdrawalAvailability
+};

@@ -61,6 +61,7 @@ const api = {
   deposit: (payload) => apiFetch(`${API_BASE}/deposits`, { method: 'POST', body: payload }),
   verifyAccount: (payload) => apiFetch(`${API_BASE}/verify-account`, { method: 'POST', body: payload }),
   buyVip: (payload) => apiFetch(`${API_BASE}/vips/buy`, { method: 'POST', body: payload }),
+  getWithdrawalAvailability: () => apiFetch(`${API_BASE}/withdrawals/availability`),
   withdraw: (payload) => apiFetch(`${API_BASE}/withdrawals`, { method: 'POST', body: payload })
 };
 

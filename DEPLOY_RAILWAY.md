@@ -6,7 +6,7 @@
 - Run a single application instance. The current JSON store is not a multi-instance transactional database.
 - Configure a private `JWT_SECRET` and `ADMIN_TOKEN` (each at least 32 characters), plus `BASE_URL=https://<your-deployed-domain>`.
 - Serve hosted environments over HTTPS. Use `NODE_ENV=staging` for a test-key staging deployment and `NODE_ENV=production` for live.
-- Set `APP_TIMEZONE=Africa/Lagos`; the server enforces the daily withdrawal window from 9:00 AM inclusive to 9:00 PM exclusive in that timezone. Admins send withdrawal transfers manually outside Monetrix, then mark the request paid.
+- Set `APP_TIMEZONE=Africa/Lagos`; withdrawals are available Tuesdays and Thursdays from 9:00 AM inclusive to 9:00 PM exclusive in that timezone. Admins send withdrawal transfers manually outside Monetrix, then mark the request paid.
 
 ## Paystack test setup (staging)
 Set these in Railway Variables. Keep secret values marked private:
@@ -30,15 +30,15 @@ Register this webhook URL in the Paystack dashboard:
 Use Paystack test keys only on a staging deployment. Do not treat test transactions as real funds. The server verifies payment status, amount, and NGN currency; successful deposits remain pending for operations approval before the existing wallet-credit flow runs.
 
 ## Live collection
-Only after Paystack has approved Monetrix's business and collection model:
+Paystack has approved Monetrix's business and collection model. To enable live checkout, configure:
 
 1. Replace both test keys with matching live keys.
 2. Set `NODE_ENV=production`.
 3. Set `PAYMENT_MODE=live` so bank verification cannot use the development mock.
 4. Configure private `JWT_SECRET` and `ADMIN_TOKEN` values of at least 32 characters each.
 5. Keep `APP_TIMEZONE=Africa/Lagos`.
-6. Set `PAYSTACK_COLLECTION_APPROVED=true` only when Paystack has approved Monetrix's live collection model.
-7. Keep the callback and webhook URLs on HTTPS and verify the configured webhook delivery.
+6. Set `PAYSTACK_COLLECTION_APPROVED=true` to confirm the approved live collection model. Live checkout also requires production mode and matching live keys.
+7. Set `BASE_URL=https://monetrix-production.up.railway.app` and `PAYSTACK_CALLBACK_URL=https://monetrix-production.up.railway.app/deposit.html` (or omit the callback variable to derive it from `BASE_URL`). Register `https://monetrix-production.up.railway.app/api/paystack/webhook` in Paystack.
 8. Confirm the deployment uses persistent storage and exactly one app instance.
 
 The secret key must never be exposed in frontend code or committed. `.env` is ignored by Git; configure production secrets in Railway Variables.

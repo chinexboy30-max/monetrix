@@ -11,6 +11,23 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   const form = document.getElementById('withdraw-form');
   const submitBtn = form?.querySelector('button[type="submit"]');
   const verifyBtn = document.getElementById('verify-account');
+  const scheduleStatus = document.getElementById('withdraw-schedule-status');
+
+  async function refreshWithdrawalAvailability(){
+    try{
+      const availability = await api.getWithdrawalAvailability();
+      if(scheduleStatus) scheduleStatus.textContent = availability.message;
+      if(submitBtn) submitBtn.disabled = !availability.available;
+      return availability;
+    }catch(error){
+      console.error('Unable to load withdrawal schedule:', error);
+      if(scheduleStatus) scheduleStatus.textContent = 'Unable to check the withdrawal schedule. Please refresh the page before submitting a request.';
+      if(submitBtn) submitBtn.disabled = false;
+      return null;
+    }
+  }
+
+  await refreshWithdrawalAvailability();
 
   if(!u.activePlan){
     if(withdrawStatus){
@@ -24,6 +41,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   }
 
   if(withdrawStatus) withdrawStatus.style.display = 'none';
+  window.setInterval(refreshWithdrawalAvailability, 60 * 1000);
 
   // Account verification flow
   verifyBtn?.addEventListener('click', async ()=>{
@@ -48,6 +66,15 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   if(!form) return;
   form.addEventListener('submit', async e=>{
     e.preventDefault();
+    const availability = await refreshWithdrawalAvailability();
+    if(!availability){
+      showToast('Unable to check the withdrawal schedule. Please try again.', 'error');
+      return;
+    }
+    if(!availability.available){
+      showToast(availability.message, 'warning');
+      return;
+    }
     const button = submitBtn;
     const stopLoading = setLoading(button, true);
     const amt = Number(document.getElementById('withdraw-amount').value);

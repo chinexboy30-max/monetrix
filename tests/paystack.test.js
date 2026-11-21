@@ -82,7 +82,7 @@ https.request = (url, options, callback) => {
   return request;
 };
 
-const { app, isWithdrawalWindowOpen } = require('../server');
+const { app, isWithdrawalWindowOpen, getWithdrawalAvailability } = require('../server');
 let server;
 let origin;
 let userCookie;
@@ -172,6 +172,37 @@ test('Paystack collection is verified, idempotent, and user-owned', async (t) =>
     });
     assert.notEqual(weakAdminToken.status, 0);
     assert.match(weakAdminToken.stderr, /ADMIN_TOKEN must be configured with at least 32 characters in production/);
+  });
+
+  await t.test('enables live checkout only with production, matching live configuration, and approval', () => {
+    const serverPath = path.join(__dirname, '..', 'server.js');
+    const script = `const { app } = require(${JSON.stringify(serverPath)}); const server = app.listen(0, '127.0.0.1', async () => { try { const response = await fetch('http://127.0.0.1:' + server.address().port + '/api/paystack/config'); console.log(JSON.stringify(await response.json())); } finally { server.close(); } });`;
+    const liveEnv = {
+      ...process.env,
+      NODE_ENV: 'production',
+      JWT_SECRET: 'test-jwt-secret-with-enough-entropy',
+      ADMIN_TOKEN: 'test-admin-token-with-enough-entropy',
+      PAYMENT_MODE: 'live',
+      PAYSTACK_PUBLIC_KEY: 'pk_live_mock',
+      PAYSTACK_SECRET_KEY: 'sk_live_mock',
+      PAYSTACK_CALLBACK_URL: 'https://monetrix.example.test/deposit.html',
+      BASE_URL: 'https://monetrix.example.test',
+      PAYSTACK_COLLECTION_APPROVED: 'true'
+    };
+    const approved = spawnSync(process.execPath, ['-e', script], { cwd: os.tmpdir(), encoding: 'utf8', env: liveEnv });
+    assert.equal(approved.status, 0, approved.stderr);
+    const liveConfig = JSON.parse(approved.stdout.trim());
+    assert.equal(liveConfig.mode, 'live');
+    assert.equal(liveConfig.enabled, true);
+    assert.equal(Object.prototype.hasOwnProperty.call(liveConfig, 'secretKey'), false);
+
+    const unapproved = spawnSync(process.execPath, ['-e', script], {
+      cwd: os.tmpdir(),
+      encoding: 'utf8',
+      env: { ...liveEnv, PAYSTACK_COLLECTION_APPROVED: 'false' }
+    });
+    assert.equal(unapproved.status, 0, unapproved.stderr);
+    assert.equal(JSON.parse(unapproved.stdout.trim()).enabled, false);
   });
 
   await t.test('serves public pages while protecting data and admin files', async () => {
@@ -310,6 +341,10 @@ test('Paystack collection is verified, idempotent, and user-owned', async (t) =>
       headers: { 'x-admin-token': adminToken }
     });
     assert.equal(approved.response.status, 200);
+    const approvalNotifications = await request('/api/notifications');
+    const approvalMessage = approvalNotifications.data.notifications.find((item) => item.title === 'Deposit approved');
+    assert.ok(approvalMessage);
+    assert.equal(approvalMessage.expiresAt - approvalMessage.createdAt, 24 * 60 * 60 * 1000);
     const duplicateApproval = await request(`/api/admin/deposits/${matchingDeposit.id}/approve`, {
       method: 'POST',
       headers: { 'x-admin-token': adminToken }
@@ -397,11 +432,65 @@ test('Paystack collection is verified, idempotent, and user-owned', async (t) =>
     }
   });
 
-  await t.test('accepts withdrawals only from 9 AM up to 9 PM Africa/Lagos time', () => {
-    assert.equal(isWithdrawalWindowOpen(Date.parse('2025-01-15T07:59:59Z')), false);
-    assert.equal(isWithdrawalWindowOpen(Date.parse('2025-01-15T08:00:00Z')), true);
-    assert.equal(isWithdrawalWindowOpen(Date.parse('2025-01-15T19:59:59Z')), true);
-    assert.equal(isWithdrawalWindowOpen(Date.parse('2025-01-15T20:00:00Z')), false);
+  await t.test('accepts withdrawals only from 9 AM up to 9 PM Africa/Lagos time', async () => {
+    assert.equal(isWithdrawalWindowOpen(Date.parse('2025-01-07T06:59:59Z')), false);
+    assert.equal(isWithdrawalWindowOpen(Date.parse('2025-01-07T08:00:00Z')), true);
+    assert.equal(isWithdrawalWindowOpen(Date.parse('2025-01-07T19:59:59Z')), true);
+    assert.equal(isWithdrawalWindowOpen(Date.parse('2025-01-07T20:00:00Z')), false);
+    assert.equal(isWithdrawalWindowOpen(Date.parse('2025-01-08T08:00:00Z')), false);
+    assert.equal(isWithdrawalWindowOpen(Date.parse('2025-01-09T07:59:59Z')), false);
+    assert.equal(isWithdrawalWindowOpen(Date.parse('2025-01-09T08:00:00Z')), true);
+    assert.equal(isWithdrawalWindowOpen(Date.parse('2025-01-09T19:59:59Z')), true);
+    assert.equal(isWithdrawalWindowOpen(Date.parse('2025-01-09T20:00:00Z')), false);
+
+    const closedSchedule = getWithdrawalAvailability(Date.parse('2025-01-08T08:00:00Z'));
+    assert.equal(closedSchedule.available, false);
+    assert.equal(closedSchedule.nextOpenAt, Date.parse('2025-01-09T08:00:00Z'));
+    assert.match(closedSchedule.message, /next open/i);
+
+    const availability = await request('/api/withdrawals/availability');
+    assert.equal(availability.response.status, 200);
+    assert.equal(availability.data.timezone, 'Africa/Lagos');
+    assert.equal(typeof availability.data.available, 'boolean');
+  });
+
+  await t.test('expires administrator announcements and only explicitly expiring inbox messages', async () => {
+    const created = await request('/api/admin/announcements', {
+      method: 'POST',
+      headers: { 'x-admin-token': adminToken },
+      body: { title: 'Temporary admin update', message: 'This message expires.' }
+    });
+    assert.equal(created.response.status, 200);
+    assert.equal(created.data.announcement.expiresAt - created.data.announcement.createdAt, 24 * 60 * 60 * 1000);
+    const activeAnnouncements = await request('/api/announcements');
+    assert.ok(activeAnnouncements.data.announcements.some((item) => item.id === created.data.announcement.id));
+
+    const storePath = path.join(dataDirectory, 'store.json');
+    const store = JSON.parse(fs.readFileSync(storePath, 'utf8'));
+    const expiredAt = Date.now() - 1;
+    const announcement = store.announcements.find((item) => item.id === created.data.announcement.id);
+    announcement.createdAt = expiredAt - 24 * 60 * 60 * 1000;
+    announcement.expiresAt = expiredAt;
+    store.notifications.push(
+      { id: 'expired-admin-message', userId, title: 'Expired admin message', text: 'Expired', createdAt: expiredAt - 24 * 60 * 60 * 1000, expiresAt: expiredAt },
+      { id: 'legacy-expired-admin-message', userId, title: 'Deposit rejected', text: 'Legacy expired', createdAt: expiredAt - 25 * 60 * 60 * 1000 },
+      { id: 'persistent-activity', userId, title: 'Account activity', text: 'Keep this', createdAt: expiredAt }
+    );
+    fs.writeFileSync(storePath, JSON.stringify(store, null, 2));
+
+    const hiddenAnnouncements = await request('/api/announcements');
+    assert.ok(!hiddenAnnouncements.data.announcements.some((item) => item.id === created.data.announcement.id));
+    const refreshedAnnouncements = await request('/api/announcements');
+    assert.ok(!refreshedAnnouncements.data.announcements.some((item) => item.id === created.data.announcement.id));
+    const adminHistory = await request('/api/admin/announcements', { headers: { 'x-admin-token': adminToken } });
+    assert.ok(adminHistory.data.announcements.some((item) => item.id === created.data.announcement.id));
+
+    const inbox = await request('/api/notifications');
+    assert.ok(!inbox.data.notifications.some((item) => item.id === 'expired-admin-message'));
+    assert.ok(!inbox.data.notifications.some((item) => item.id === 'legacy-expired-admin-message'));
+    assert.ok(inbox.data.notifications.some((item) => item.id === 'persistent-activity'));
+    const refreshedInbox = await request('/api/notifications');
+    assert.ok(!refreshedInbox.data.notifications.some((item) => item.id === 'expired-admin-message'));
   });
 
   await t.test('rejects legacy bank deposits and records manual withdrawal payout once', async () => {
